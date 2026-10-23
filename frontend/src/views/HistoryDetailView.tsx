@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Banner } from '../components/Banner';
 import { StepList } from '../components/StepList';
-import { CLEANUP_META, CONCLUSION_META, POLICY_LABEL, computeCounts, fmtDateTime } from '../domain';
+import { CLEANUP_META, CONCLUSION_META, POLICY_LABEL, fmtDateTime } from '../domain';
 import type { Session } from '../state/useSession';
 import type { RunSnapshot } from '../types';
 
@@ -32,7 +32,8 @@ export function HistoryDetailView({ session, runId, onBack }: HistoryDetailViewP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
-  const counts = run ? computeCounts(run.steps) : null;
+  // 历史详情同样使用记录里的计数，避免与后端投影出现两套口径。
+  const counts = run ? run.counts : null;
   const conclusion = run ? CONCLUSION_META[run.conclusion] : null;
 
   return (

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createBackend, ApiRequestError, type Backend } from '../api/backend';
-import { computeCounts, convergedCount } from '../domain';
+import { convergedCount } from '../domain';
 import type {
   CheckpointResult,
   ConfigValidationResult,
@@ -476,7 +476,8 @@ export function useSession() {
     [catalog],
   );
 
-  const counts = useMemo(() => (run ? computeCounts(run.steps) : null), [run]);
+  // 计数以后端快照为准：步骤状态与计数都由事件投影产出，前端再做一次推导会出现两套口径。
+  const counts = useMemo(() => (run ? run.counts : null), [run]);
   const converged = useMemo(() => (counts ? convergedCount(counts) : 0), [counts]);
 
   return {
