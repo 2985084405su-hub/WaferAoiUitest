@@ -265,7 +265,7 @@ internal sealed class RunStore
                 Message = message,
                 Data = data
             };
-            string line = JsonSerializer.Serialize(item, JsonDefaults.File);
+            string line = JsonSerializer.Serialize(item, JsonDefaults.Line);
             File.AppendAllText(_paths.EventsPath(session.Snapshot.RunId), line + Environment.NewLine, new UTF8Encoding(false));
             session.Events.Add(item);
             EventProjector.Apply(session, item);

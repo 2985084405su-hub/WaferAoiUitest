@@ -635,6 +635,8 @@ internal sealed class RunManager
     {
         try
         {
+            // 已核对执行器进程仍存活，接管期间由生命周期置为存活；事件投影不再改写 Alive。
+            session.Snapshot.Executor.Alive = true;
             await _executor.AttachAsync(
                 session,
                 session.Snapshot.Executor.ProcessId,

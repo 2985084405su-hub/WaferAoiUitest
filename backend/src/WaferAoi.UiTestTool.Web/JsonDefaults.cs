@@ -12,6 +12,9 @@ internal static class JsonDefaults
     /// <summary>落盘文件：与接口同构，便于现场直接查看。</summary>
     public static readonly JsonSerializerOptions File = Create(true);
 
+    /// <summary>事件行：events.jsonl 一行一条，不能缩进，否则按行重放会丢事件。</summary>
+    public static readonly JsonSerializerOptions Line = Create(false);
+
     /// <summary>创建选项。</summary>
     /// <param name="indented">是否缩进。</param>
     private static JsonSerializerOptions Create(bool indented)
