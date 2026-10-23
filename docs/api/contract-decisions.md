@@ -50,6 +50,7 @@
 | 同一 `requestId` 重复提交 | 202 | —（`replayed=true`） |
 | 非当前/已处理确认点 | 409 | `checkpoint_not_current` |
 | 已超时 | 409 | `checkpoint_expired` |
+| 同一确认点已提交另一条命令、尚未回执 | 409 | `checkpoint_already_submitted` |
 | 本轮已结束 | 409 | `run_not_waiting` |
 | 阻塞/失败未填原因 | 400 | `reason_required` |
 

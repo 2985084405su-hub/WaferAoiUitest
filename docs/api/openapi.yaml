@@ -278,7 +278,7 @@ paths:
         只接受当前仍在等待的确认点。校验顺序：运行存在 → requestId 幂等 → 运行未结束 → 确认点是当前等待点且未过期 → 原因校验 → 写入命令。
         重复的同一 `requestId` 返回 HTTP 202 且 `replayed=true`，不重复生效。
         过期返回 409 `checkpoint_expired`；非当前/已处理返回 409 `checkpoint_not_current`；
-        运行已结束返回 409 `run_not_waiting`；阻塞/失败缺原因返回 400 `reason_required`。
+        同一确认点已有另一条待回执命令时返回 409 `checkpoint_already_submitted`，不会重复排队；\n        运行已结束返回 409 `run_not_waiting`；阻塞/失败缺原因返回 400 `reason_required`。
         接口返回 202 表示命令已送达执行器，最终结果以 `checkpointResolved` 与 `stepFinished` 事件为准。
       parameters:
         - $ref: '#/components/parameters/RunId'
