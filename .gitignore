@@ -13,10 +13,10 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 
-# 本机运行数据与证据
-data/
-runs/
-artifacts/
+# 本机运行数据与证据（宿主默认数据目录在 LOCALAPPDATA，以下仅锚定仓库根）
+/data/
+/runs/
+/artifacts/
 *.log
 *.jsonl.tmp
 
