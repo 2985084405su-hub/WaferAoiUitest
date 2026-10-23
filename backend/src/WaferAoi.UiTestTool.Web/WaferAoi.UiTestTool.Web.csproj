@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Web 宿主只运行在测试机 Windows 桌面；使用 windows TFM 以使用进程身份与管理员检查 API。 -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>WaferAoi.UiTestTool.Web</RootNamespace>
+    <AssemblyName>WaferAoi.UiTestTool.Web</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WaferAoi.UiTestTool.Contracts\WaferAoi.UiTestTool.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

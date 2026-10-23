@@ -1,0 +1,11 @@
+# 后端构建产物
+bin/
+obj/
+publish/
+.vs/
+TestResults/
+
+# 本机调试数据
+data/
+runs/
+*.log

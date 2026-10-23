@@ -1,0 +1,2016 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>主流程自动化回归 · 本机 Web 执行面板（高保真原型）</title>
+<style>
+/* ==========================================================================
+   设计令牌（DESIGN TOKENS）—— 与 tokens.css 保持一致，唯一来源为本文档注释
+   ========================================================================== */
+:root{
+  /* 中性 */
+  --bg:#f2f4f7;
+  --surface:#ffffff;
+  --sunken:#f8fafc;
+  --line:#d0d5dd;
+  --line-soft:#e4e7ec;
+  --ink-900:#101828;
+  --ink-700:#344054;
+  --ink-600:#475467;
+  --ink-500:#667085;
+  --ink-400:#98a2b3;
+  /* 主色 */
+  --primary:#1a56c4;
+  --primary-hover:#14459e;
+  --primary-soft:#e9f0fd;
+  --primary-line:#b9cdf4;
+  /* 语义 */
+  --pass:#0f7b53;      --pass-soft:#e6f6ef;   --pass-line:#b7e3cd;
+  --skip:#6f5a00;      --skip-soft:#fcf6e3;   --skip-line:#e8dcb0;
+  --blocked:#9a3d00;   --blocked-soft:#fdf0e7;--blocked-line:#f0cdb5;
+  --failed:#b3261e;    --failed-soft:#fdecea; --failed-line:#f3c3bf;
+  --waiting:#0b5cad;   --waiting-soft:#e8f2fd;--waiting-line:#bcd7f4;
+  --neutral:#475467;   --neutral-soft:#eef1f5;--neutral-line:#dde2e9;
+  --unknown:#5b4a86;   --unknown-soft:#f1edfa;--unknown-line:#d5cbec;
+  /* 排版 */
+  --font-sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --font-mono:"Cascadia Mono",Consolas,"SFMono-Regular","Microsoft YaHei UI",monospace;
+  --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-16:16px; --fs-20:20px; --fs-24:24px;
+  --lh-tight:1.25; --lh-body:1.55;
+  /* 间距（4 的倍数） */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
+  /* 圆角与阴影 */
+  --r-sm:4px; --r-md:6px; --r-lg:10px; --r-pill:999px;
+  --shadow-1:0 1px 2px rgba(16,24,40,.06);
+  --shadow-2:0 10px 28px -16px rgba(16,24,40,.28);
+  --focus:0 0 0 3px rgba(26,86,196,.28);
+  --dur-fast:120ms; --dur-base:180ms;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink-900);
+  font-family:var(--font-sans); font-size:var(--fs-14); line-height:var(--lh-body);
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit}
+h1,h2,h3,h4{margin:0;font-weight:600;line-height:var(--lh-tight)}
+p{margin:0}
+a{color:var(--primary)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:var(--r-md)}
+
+/* ============================ 顶栏 ============================ */
+.topbar{
+  position:sticky; top:0; z-index:40;
+  height:56px; display:flex; align-items:center; gap:var(--sp-3);
+  padding:0 var(--sp-5);
+  background:var(--surface); border-bottom:1px solid var(--line-soft);
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{
+  width:26px;height:26px;border-radius:7px;background:var(--primary);
+  display:grid;place-items:center;color:#fff;flex:none;
+}
+.brand-mark svg{width:15px;height:15px;display:block}
+.brand-title{font-size:var(--fs-16);font-weight:650;letter-spacing:.01em;white-space:nowrap}
+.scope-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:2px 8px;border-radius:var(--r-pill);
+  background:var(--primary-soft); color:var(--primary);
+  border:1px solid var(--primary-line);
+  font-size:var(--fs-12); font-weight:600; white-space:nowrap;
+}
+.topbar-spacer{flex:1}
+.top-meta{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;justify-content:flex-end}
+
+/* ============================ 演示控制条（仅原型） ============================ */
+.demo-bar{
+  display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+  padding:6px var(--sp-5);
+  background:#fff8e6; border-bottom:1px solid #f0e0b8;
+  font-size:var(--fs-12); color:#6f5a00;
+}
+.demo-bar .demo-tag{
+  font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:var(--fs-11);
+  border:1px solid #e8dcb0;background:#fffdf5;border-radius:var(--r-sm);padding:1px 6px;
+}
+.demo-bar select{
+  font:inherit;color:var(--ink-900);background:#fff;border:1px solid #e8dcb0;border-radius:var(--r-md);
+  padding:3px 6px;
+}
+.demo-hint{color:#8a6f1a}
+
+/* ============================ 布局 ============================ */
+.layout{
+  display:grid;
+  grid-template-columns:360px minmax(0,1fr) 384px;
+  gap:var(--sp-4);
+  align-items:start;
+  padding:var(--sp-4) var(--sp-5) var(--sp-6);
+  max-width:1920px; margin:0 auto;
+}
+.col{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+.col-right{position:sticky;top:72px}
+
+/* ============================ 卡片 ============================ */
+.card{
+  background:var(--surface); border:1px solid var(--line-soft);
+  border-radius:var(--r-lg); box-shadow:var(--shadow-1);
+}
+.card-head{
+  display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-3) var(--sp-4);
+  border-bottom:1px solid var(--line-soft);
+}
+.card-head h2{font-size:var(--fs-13);font-weight:650;letter-spacing:.02em}
+.card-head .head-note{margin-left:auto;font-size:var(--fs-12);color:var(--ink-500)}
+.card-body{padding:var(--sp-4)}
+.card-body.tight{padding:var(--sp-3) var(--sp-4)}
+.card-foot{
+  padding:var(--sp-3) var(--sp-4); border-top:1px solid var(--line-soft);
+  background:var(--sunken); border-radius:0 0 var(--r-lg) var(--r-lg);
+}
+
+/* ============================ 表单 ============================ */
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:var(--sp-3)}
+.field:last-child{margin-bottom:0}
+.field label{font-size:var(--fs-12);font-weight:600;color:var(--ink-700);display:flex;gap:6px;align-items:baseline}
+.field label .req{color:var(--failed);font-weight:700}
+.field .hint{font-size:var(--fs-11);color:var(--ink-500);line-height:1.45}
+.field .hint.warn{color:var(--blocked)}
+.control{
+  width:100%; height:34px; padding:0 10px;
+  border:1px solid var(--line); border-radius:var(--r-md);
+  background:#fff; color:var(--ink-900); font-size:var(--fs-13);
+  transition:border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.control::placeholder{color:var(--ink-400)}
+.control:hover:not(:disabled){border-color:var(--ink-400)}
+.control:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus)}
+.control.mono{font-family:var(--font-mono);font-size:var(--fs-12)}
+.control:disabled{background:var(--sunken);color:var(--ink-600);cursor:not-allowed;border-color:var(--line-soft)}
+.field.has-error .control{border-color:var(--failed)}
+.field.has-error .control:focus{box-shadow:0 0 0 3px rgba(179,38,30,.2)}
+.err-msg{display:flex;gap:5px;align-items:flex-start;font-size:var(--fs-11);color:var(--failed);font-weight:600}
+.err-msg svg{flex:none;margin-top:2px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)}
+.grid-2 .field{margin-bottom:0}
+.pw-line{
+  display:flex;align-items:center;gap:var(--sp-2);
+  padding:8px 10px;border:1px dashed var(--line);border-radius:var(--r-md);
+  background:var(--sunken);font-size:var(--fs-12);color:var(--ink-600);
+}
+.pw-line .ok{color:var(--pass);font-weight:700}
+.readonly-tag{
+  display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-11);font-weight:600;
+  color:var(--ink-500);border:1px solid var(--line-soft);background:var(--sunken);
+  border-radius:var(--r-sm);padding:1px 6px;
+}
+
+/* ============================ 复选选项 ============================ */
+.opt-list{display:flex;flex-direction:column;gap:2px}
+.opt{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:9px 10px;border-radius:var(--r-md);
+  border:1px solid transparent;cursor:pointer;
+  transition:background var(--dur-fast),border-color var(--dur-fast);
+}
+.opt:hover:not(.disabled){background:var(--sunken);border-color:var(--line-soft)}
+.opt.checked{background:var(--primary-soft);border-color:var(--primary-line)}
+.opt.disabled{cursor:not-allowed;opacity:.72}
+.opt input{
+  appearance:none;width:16px;height:16px;margin:1px 0 0;flex:none;
+  border:1.5px solid var(--ink-400);border-radius:4px;background:#fff;
+  display:grid;place-content:center;cursor:inherit;
+  transition:background var(--dur-fast),border-color var(--dur-fast);
+}
+.opt input:checked{background:var(--primary);border-color:var(--primary)}
+.opt input:checked::after{
+  content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;
+  transform:rotate(-45deg) translate(1px,-1px);
+}
+.opt input:focus-visible{box-shadow:var(--focus)}
+.opt input:disabled{cursor:not-allowed}
+.opt-text{display:flex;flex-direction:column;gap:1px;min-width:0}
+.opt-text strong{font-size:var(--fs-13);font-weight:600;color:var(--ink-900)}
+.opt-text span{font-size:var(--fs-11);color:var(--ink-500);line-height:1.45}
+.strategy{
+  display:flex;gap:8px;align-items:flex-start;
+  margin-top:var(--sp-3);padding:10px 12px;
+  border:1px solid var(--primary-line);background:var(--primary-soft);
+  border-radius:var(--r-md);font-size:var(--fs-12);color:#123b86;
+}
+.strategy svg{flex:none;margin-top:1px}
+.strategy strong{font-weight:700}
+.exclusive-note{font-size:var(--fs-11);color:var(--ink-500);margin-top:6px;display:flex;gap:5px;align-items:flex-start}
+
+/* ============================ 按钮 ============================ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:34px;padding:0 14px;border-radius:var(--r-md);
+  border:1px solid transparent;background:transparent;
+  font-size:var(--fs-13);font-weight:600;cursor:pointer;white-space:nowrap;
+  transition:background var(--dur-fast),border-color var(--dur-fast),color var(--dur-fast);
+}
+.btn svg{width:15px;height:15px;flex:none}
+.btn:disabled{cursor:not-allowed}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow-1)}
+.btn-primary:hover:not(:disabled){background:var(--primary-hover)}
+.btn-primary:disabled{background:#c6d3ea;color:#5a6f93;box-shadow:none}
+.btn-secondary{background:#fff;border-color:var(--line);color:var(--ink-700)}
+.btn-secondary:hover:not(:disabled){background:var(--sunken);border-color:var(--ink-400)}
+.btn-ghost{background:transparent;color:var(--ink-600)}
+.btn-ghost:hover:not(:disabled){background:var(--neutral-soft);color:var(--ink-900)}
+.btn-danger{background:#fff;border-color:var(--failed-line);color:var(--failed)}
+.btn-danger:hover:not(:disabled){background:var(--failed-soft)}
+.btn-warn{background:#fff;border-color:var(--blocked-line);color:var(--blocked)}
+.btn-warn:hover:not(:disabled){background:var(--blocked-soft)}
+.btn-block{width:100%}
+.btn-lg{height:40px;font-size:var(--fs-14)}
+.btn-sm{height:28px;padding:0 10px;font-size:var(--fs-12)}
+.btn-row{display:flex;gap:var(--sp-2);flex-wrap:wrap}
+
+/* ============================ 状态徽标 ============================ */
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  height:22px;padding:0 8px;border-radius:var(--r-pill);
+  font-size:var(--fs-11);font-weight:700;white-space:nowrap;
+  border:1px solid transparent;
+}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.b-pass{background:var(--pass-soft);color:var(--pass);border-color:var(--pass-line)}
+.b-manual{background:var(--pass-soft);color:var(--pass);border-color:var(--pass-line)}
+.b-skip{background:var(--skip-soft);color:var(--skip);border-color:var(--skip-line)}
+.b-blocked{background:var(--blocked-soft);color:var(--blocked);border-color:var(--blocked-line)}
+.b-failed{background:var(--failed-soft);color:var(--failed);border-color:var(--failed-line)}
+.b-waiting{background:var(--waiting-soft);color:var(--waiting);border-color:var(--waiting-line)}
+.b-running{background:var(--primary-soft);color:var(--primary);border-color:var(--primary-line)}
+.b-neutral{background:var(--neutral-soft);color:var(--neutral);border-color:var(--neutral-line)}
+.b-unknown{background:var(--unknown-soft);color:var(--unknown);border-color:var(--unknown-line)}
+.b-lock{background:var(--blocked-soft);color:var(--blocked);border-color:var(--blocked-line)}
+.b-idle{background:var(--neutral-soft);color:var(--neutral);border-color:var(--neutral-line)}
+.spin{
+  width:9px;height:9px;border-radius:50%;
+  border:1.5px solid currentColor;border-right-color:transparent;
+  animation:spin .8s linear infinite;flex:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+
+/* ============================ 阶段步进 ============================ */
+.stepper{display:flex;align-items:center;gap:0;flex-wrap:wrap;padding:0 0 var(--sp-1)}
+.step-item{display:flex;align-items:center;gap:8px;font-size:var(--fs-12);color:var(--ink-500)}
+.step-item .idx{
+  width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+  border:1.5px solid var(--line);background:#fff;font-size:10px;font-weight:700;color:var(--ink-500);
+}
+.step-item.done{color:var(--ink-700)}
+.step-item.done .idx{background:var(--pass-soft);border-color:var(--pass-line);color:var(--pass)}
+.step-item.active{color:var(--ink-900);font-weight:700}
+.step-item.active .idx{background:var(--primary);border-color:var(--primary);color:#fff}
+.step-item.pending-field{color:var(--blocked);font-weight:700}
+.step-item.pending-field .idx{background:var(--blocked-soft);border-color:var(--blocked-line);color:var(--blocked)}
+.step-sep{width:14px;height:1px;background:var(--line);margin:0 6px}
+
+/* ============================ 汇总条 ============================ */
+.summary{display:flex;flex-direction:column;gap:var(--sp-3)}
+.summary-top{display:flex;gap:var(--sp-4);align-items:flex-start;flex-wrap:wrap}
+.progress-wrap{flex:1;min-width:260px;display:flex;flex-direction:column;gap:6px}
+.progress-meta{display:flex;align-items:baseline;gap:8px;font-size:var(--fs-12);color:var(--ink-600);flex-wrap:wrap}
+.progress-meta strong{font-size:var(--fs-20);font-weight:650;color:var(--ink-900);font-variant-numeric:tabular-nums;line-height:1}
+.progress{height:8px;border-radius:var(--r-pill);background:#e8ecf2;overflow:hidden;display:flex}
+.progress i{height:100%;display:block;transition:width var(--dur-base)}
+.progress .seg-pass{background:var(--pass)}
+.progress .seg-skip{background:#c9a227}
+.progress .seg-blocked{background:#d9730d}
+.progress .seg-failed{background:var(--failed)}
+.progress .seg-waiting{background:#4f93e0}
+.counts{display:grid;grid-template-columns:repeat(5,minmax(64px,1fr));gap:6px;width:100%}
+.count{
+  border:1px solid var(--line-soft);border-radius:var(--r-md);background:var(--sunken);
+  padding:7px 10px;display:flex;flex-direction:column;gap:1px;
+}
+.count .k{font-size:var(--fs-11);font-weight:600;color:var(--ink-500);display:flex;align-items:center;gap:5px}
+.count .k i{width:6px;height:6px;border-radius:50%;display:block}
+.count .v{font-size:var(--fs-20);font-weight:650;line-height:1.1;font-variant-numeric:tabular-nums}
+.count.c-pass{border-color:var(--pass-line);background:var(--pass-soft)}.count.c-pass .v{color:var(--pass)}
+.count.c-skip{border-color:var(--skip-line);background:var(--skip-soft)}.count.c-skip .v{color:var(--skip)}
+.count.c-blocked{border-color:var(--blocked-line);background:var(--blocked-soft)}.count.c-blocked .v{color:var(--blocked)}
+.count.c-failed{border-color:var(--failed-line);background:var(--failed-soft)}.count.c-failed .v{color:var(--failed)}
+.count.c-notrun .v{color:var(--ink-700)}
+.scope-note{
+  display:flex;gap:8px;align-items:flex-start;
+  font-size:var(--fs-12);color:var(--ink-600);
+  padding:8px 10px;border-left:3px solid var(--primary-line);background:var(--sunken);border-radius:0 var(--r-md) var(--r-md) 0;
+}
+.scope-note svg{flex:none;margin-top:2px}
+.aux-line{display:flex;gap:var(--sp-3);flex-wrap:wrap;font-size:var(--fs-12);color:var(--ink-600)}
+.aux-line .k{color:var(--ink-500)}
+.aux-line .v{font-weight:600;color:var(--ink-900)}
+
+/* ============================ 步骤清单 ============================ */
+.steps-card{overflow:hidden}
+.steps-scroll{max-height:none}
+.sec-head{
+  position:sticky;top:56px;z-index:5;
+  display:flex;align-items:center;gap:10px;
+  padding:8px var(--sp-4);
+  background:var(--sunken);
+  border-top:1px solid var(--line-soft);
+  border-bottom:1px solid var(--line-soft);
+  font-size:var(--fs-12);
+}
+.sec-head:first-child{border-top:none}
+.sec-idx{
+  font-family:var(--font-mono);font-size:var(--fs-12);font-weight:700;
+  color:var(--ink-600);background:#fff;border:1px solid var(--line-soft);
+  border-radius:var(--r-sm);padding:0 5px;line-height:18px;
+}
+.sec-head .sec-title{font-weight:700;color:var(--ink-800);color:var(--ink-700)}
+.sec-head .sec-prog{margin-left:auto;color:var(--ink-500);font-variant-numeric:tabular-nums}
+.step-row{
+  display:grid;grid-template-columns:70px minmax(0,1fr) 132px 82px;
+  gap:var(--sp-3);align-items:center;
+  padding:9px var(--sp-4) 9px 12px;
+  border-bottom:1px solid var(--line-soft);
+  border-left:3px solid transparent;
+  cursor:pointer;background:#fff;
+  transition:background var(--dur-fast);
+}
+.step-row:hover{background:#fbfcfe}
+.step-row.selected{background:#f5f8ff}
+.step-row.current{
+  background:#f2f7ff;border-left-color:var(--primary);
+}
+.step-row.current .step-id{color:var(--primary)}
+.step-row.st-failed-row{border-left-color:var(--failed);background:#fffafa}
+.step-row.st-blocked-row{border-left-color:#d9730d;background:#fffbf7}
+.step-row.st-waiting-row{border-left-color:var(--waiting);background:#f6faff}
+.step-id{
+  font-family:var(--font-mono);font-size:var(--fs-12);font-weight:700;color:var(--ink-600);
+  font-variant-numeric:tabular-nums;
+}
+.step-main{min-width:0;display:flex;flex-direction:column;gap:2px}
+.step-name{font-size:var(--fs-13);font-weight:600;color:var(--ink-900);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tag{
+  display:inline-flex;align-items:center;height:17px;padding:0 5px;border-radius:var(--r-sm);
+  font-size:10px;font-weight:700;letter-spacing:.02em;border:1px solid var(--line-soft);
+  background:var(--sunken);color:var(--ink-600);white-space:nowrap;
+}
+.tag.tag-manual{border-color:var(--waiting-line);background:var(--waiting-soft);color:var(--waiting)}
+.tag.tag-hw{border-color:var(--skip-line);background:var(--skip-soft);color:var(--skip)}
+.step-reason{font-size:var(--fs-11);color:var(--ink-500);line-height:1.45}
+.step-reason strong{color:var(--ink-700);font-weight:600}
+.step-dur{font-size:var(--fs-12);color:var(--ink-500);text-align:right;font-variant-numeric:tabular-nums}
+.step-st{justify-self:start}
+.empty-row{padding:var(--sp-5);text-align:center;color:var(--ink-500);font-size:var(--fs-12)}
+
+/* ============================ 人工确认 / 现场处理 高亮卡 ============================ */
+.action-card{
+  border:1px solid var(--waiting-line);
+  border-left:4px solid var(--waiting);
+  border-radius:var(--r-lg);background:#fbfdff;
+  box-shadow:var(--shadow-2);
+  overflow:hidden;
+}
+.action-card.pending{
+  border-color:var(--blocked-line);border-left-color:#c2410c;background:#fffaf6;
+}
+.action-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px var(--sp-4);border-bottom:1px solid rgba(11,92,173,.14)}
+.action-head h3{font-size:var(--fs-14);font-weight:700;display:flex;align-items:center;gap:8px}
+.action-head .step-ref{font-family:var(--font-mono);font-size:var(--fs-12);font-weight:700;color:var(--waiting);background:#fff;border:1px solid var(--waiting-line);border-radius:var(--r-sm);padding:1px 6px}
+.action-card.pending .action-head .step-ref{color:var(--blocked);border-color:var(--blocked-line)}
+.action-body{padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3) var(--sp-4)}
+.kv{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv .k{font-size:var(--fs-11);font-weight:600;color:var(--ink-500)}
+.kv .v{font-size:var(--fs-13);color:var(--ink-900);font-weight:600;overflow-wrap:anywhere}
+.kv .v.mono{font-family:var(--font-mono);font-size:var(--fs-12);font-weight:600}
+.instructions{
+  border:1px solid var(--line-soft);border-radius:var(--r-md);background:#fff;padding:10px 12px;
+  font-size:var(--fs-13);color:var(--ink-700);
+}
+.instructions ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.instructions li::marker{color:var(--ink-400);font-weight:700}
+.note-wrap{display:flex;flex-direction:column;gap:4px}
+.note-wrap textarea{
+  width:100%;min-height:58px;resize:vertical;padding:8px 10px;
+  border:1px solid var(--line);border-radius:var(--r-md);font:inherit;font-size:var(--fs-13);
+  color:var(--ink-900);background:#fff;
+}
+.note-wrap textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus)}
+.note-wrap textarea.has-error{border-color:var(--failed)}
+.hint-inline{font-size:var(--fs-11);color:var(--ink-500)}
+.hint-inline.err{color:var(--failed);font-weight:600}
+.verify-list{display:flex;flex-direction:column;gap:6px}
+.verify{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;
+  border:1px solid var(--line-soft);border-radius:var(--r-md);font-size:var(--fs-12);
+}
+.verify .vk{flex:1;color:var(--ink-700)}
+.verify .vs{font-weight:700;font-size:var(--fs-11);display:flex;align-items:center;gap:5px}
+.verify .vs.ok{color:var(--pass)}
+.verify .vs.wait{color:var(--blocked)}
+.danger-note{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-12);color:var(--blocked);background:var(--blocked-soft);border:1px solid var(--blocked-line);border-radius:var(--r-md);padding:9px 11px}
+.danger-note svg{flex:none;margin-top:2px}
+
+/* ============================ 结论 ============================ */
+.conclusion{display:flex;gap:var(--sp-3);align-items:flex-start;flex-wrap:wrap}
+.conclusion .cicon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:none}
+.conclusion.pass .cicon{background:var(--pass-soft);color:var(--pass)}
+.conclusion.fail .cicon{background:var(--failed-soft);color:var(--failed)}
+.conclusion.pending .cicon{background:var(--blocked-soft);color:var(--blocked)}
+.conclusion.neutral .cicon{background:var(--neutral-soft);color:var(--neutral)}
+.conclusion h3{font-size:var(--fs-14);font-weight:700}
+.conclusion p{font-size:var(--fs-12);color:var(--ink-600);margin-top:2px}
+.conclusion .meta{display:flex;gap:var(--sp-3);flex-wrap:wrap;font-size:var(--fs-12);color:var(--ink-500);margin-top:6px}
+
+/* ============================ 右侧详情 ============================ */
+.detail-empty{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:var(--sp-6) var(--sp-4);text-align:center;color:var(--ink-500);font-size:var(--fs-12);
+}
+.detail-empty svg{width:26px;height:26px;color:var(--ink-400)}
+.detail-head{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--line-soft)}
+.detail-head .sid{font-family:var(--font-mono);font-size:var(--fs-12);font-weight:700;color:var(--ink-500)}
+.detail-head h3{font-size:var(--fs-14);font-weight:700;margin:3px 0 6px}
+.detail-sec{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--line-soft)}
+.detail-sec:last-child{border-bottom:none}
+.detail-sec h4{
+  font-size:var(--fs-11);font-weight:700;color:var(--ink-500);
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;
+  display:flex;align-items:center;gap:6px;
+}
+.detail-sec h4 .n{font-weight:600;color:var(--ink-400);text-transform:none;letter-spacing:0}
+.detail-text{font-size:var(--fs-12);color:var(--ink-700);line-height:1.6}
+.assert{
+  display:flex;gap:7px;align-items:flex-start;padding:6px 0;font-size:var(--fs-12);color:var(--ink-700);
+  border-bottom:1px dashed var(--line-soft);
+}
+.assert:last-child{border-bottom:none}
+.assert .ai{flex:none;margin-top:2px;font-weight:700}
+.assert.pass .ai{color:var(--pass)}
+.assert.fail .ai{color:var(--failed)}
+.assert.wait .ai{color:var(--ink-400)}
+.logs{
+  background:#0e1726;border-radius:var(--r-md);padding:8px 10px;
+  max-height:238px;overflow:auto;
+  font-family:var(--font-mono);font-size:11.5px;line-height:1.6;color:#c8d3e2;
+}
+.logs .ln{display:flex;gap:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.logs .t{color:#7d8da8;flex:none}
+.logs .lv{flex:none;width:38px;color:#8ab4f8}
+.logs .lv.warn{color:#f0c36d}
+.logs .lv.err{color:#ff9a8f}
+.logs .msg{flex:1;min-width:0}
+.logs .empty{color:#7d8da8}
+.logs-foot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:var(--fs-11);color:var(--ink-500)}
+.artifacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.art{
+  display:flex;flex-direction:column;gap:5px;padding:8px;
+  border:1px solid var(--line-soft);border-radius:var(--r-md);background:#fff;
+  cursor:pointer;text-align:left;transition:border-color var(--dur-fast),background var(--dur-fast);
+}
+.art:hover{border-color:var(--primary-line);background:var(--primary-soft)}
+.art .thumb{
+  height:46px;border-radius:var(--r-sm);background:var(--sunken);
+  border:1px solid var(--line-soft);display:grid;place-items:center;color:var(--ink-400);
+}
+.art .nm{font-size:var(--fs-11);font-weight:600;color:var(--ink-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.art .mt{font-size:10px;color:var(--ink-500);font-family:var(--font-mono)}
+.art.missing{border-style:dashed;background:var(--sunken)}
+.art.missing .thumb{color:var(--ink-400)}
+.legend{display:flex;flex-direction:column;gap:0}
+.legend-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line-soft);font-size:var(--fs-11);color:var(--ink-600);line-height:1.45}
+.legend-row:last-child{border-bottom:none}
+.legend-row .lb{flex:none;min-width:76px}
+
+/* ============================ 提示条 ============================ */
+.banner{
+  display:flex;gap:9px;align-items:flex-start;
+  padding:9px 12px;border-radius:var(--r-md);font-size:var(--fs-12);
+  border:1px solid var(--line-soft);background:var(--sunken);color:var(--ink-700);
+}
+.banner svg{flex:none;margin-top:1px}
+.banner.warn{background:var(--skip-soft);border-color:var(--skip-line);color:var(--skip)}
+.banner.danger{background:var(--failed-soft);border-color:var(--failed-line);color:var(--failed)}
+.banner.info{background:var(--waiting-soft);border-color:var(--waiting-line);color:var(--waiting)}
+.banner.ok{background:var(--pass-soft);border-color:var(--pass-line);color:var(--pass)}
+.banner .bt{font-weight:700}
+.banner .bx{margin-left:auto;flex:none}
+
+/* ============================ 检查清单 ============================ */
+.checks{display:flex;flex-direction:column;gap:2px}
+.check-row{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-12);padding:4px 0;color:var(--ink-700)}
+.check-row .ci{flex:none;width:14px;height:14px;border-radius:50%;display:grid;place-items:center;margin-top:2px}
+.check-row.pass .ci{background:var(--pass-soft);color:var(--pass)}
+.check-row.fail .ci{background:var(--failed-soft);color:var(--failed)}
+.check-row.idle .ci{background:var(--neutral-soft);color:var(--ink-400)}
+.check-row .cd{font-size:var(--fs-11);color:var(--ink-500)}
+
+/* ============================ 历史 ============================ */
+.hist-table{width:100%;border-collapse:collapse;font-size:var(--fs-12)}
+.hist-table th{
+  text-align:left;font-size:var(--fs-11);font-weight:700;color:var(--ink-500);
+  padding:6px 10px;background:var(--sunken);border-bottom:1px solid var(--line-soft);
+  letter-spacing:.03em;white-space:nowrap;
+}
+.hist-table td{padding:8px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+.hist-table tr.clickable{cursor:pointer}
+.hist-table tr.clickable:hover td{background:#f7faff}
+.hist-table .rid{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--ink-700)}
+.hist-empty{padding:var(--sp-6);text-align:center;color:var(--ink-500);font-size:var(--fs-12)}
+
+/* ============================ 弹层 ============================ */
+.overlay{
+  position:fixed;inset:0;z-index:80;background:rgba(16,24,40,.42);
+  display:grid;place-items:center;padding:var(--sp-5);
+}
+.overlay[hidden]{display:none}
+.modal{
+  width:min(720px,100%);max-height:80vh;overflow:auto;background:#fff;
+  border-radius:var(--r-lg);box-shadow:0 24px 60px -20px rgba(16,24,40,.5);
+}
+.modal-head{display:flex;align-items:center;gap:10px;padding:12px var(--sp-4);border-bottom:1px solid var(--line-soft)}
+.modal-head h3{font-size:var(--fs-14);font-weight:700}
+.modal-head .btn{margin-left:auto}
+.modal-body{padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);font-size:var(--fs-12);color:var(--ink-700)}
+.preview-box{
+  height:280px;border:1px dashed var(--line);border-radius:var(--r-md);
+  background:repeating-linear-gradient(45deg,#fafbfc,#fafbfc 10px,#f3f5f8 10px,#f3f5f8 20px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink-500);
+}
+pre.code{
+  margin:0;background:#0e1726;color:#c8d3e2;border-radius:var(--r-md);padding:10px 12px;
+  font-family:var(--font-mono);font-size:11.5px;line-height:1.6;overflow:auto;max-height:320px;
+}
+
+/* ============================ Toast ============================ */
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(8px);
+  background:#101828;color:#fff;border-radius:var(--r-md);
+  padding:8px 14px;font-size:var(--fs-12);box-shadow:var(--shadow-2);
+  opacity:0;pointer-events:none;transition:opacity var(--dur-base),transform var(--dur-base);
+  z-index:90;max-width:min(560px,90vw);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:#7f1d1a}
+
+/* ============================ 响应式 ============================ */
+@media (max-width:1560px){
+  .layout{grid-template-columns:330px minmax(0,1fr)}
+  .col-right{grid-column:1 / -1;position:static}
+  .col-right .card{max-height:none}
+}
+@media (max-width:1180px){
+  .layout{grid-template-columns:minmax(0,1fr);padding:var(--sp-3)}
+  .topbar{height:auto;min-height:52px;padding:8px var(--sp-3);flex-wrap:wrap}
+  .demo-bar{padding:6px var(--sp-3)}
+  .step-row{grid-template-columns:58px minmax(0,1fr) 108px;gap:8px}
+  .step-dur{display:none}
+  .counts{grid-template-columns:repeat(3,1fr)}
+  .action-grid{grid-template-columns:1fr}
+  .artifacts{grid-template-columns:1fr}
+  .sec-head{top:0}
+}
+@media print{
+  .demo-bar,.topbar,.col-right,.btn{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M4 7h5l3 4h8M4 17h5l3-4"/>
+      </svg>
+    </span>
+    <span class="brand-title">主流程自动化回归</span>
+  </div>
+  <span class="scope-badge">本期 01—06 节 · 27 / 184 步</span>
+  <div class="topbar-spacer"></div>
+  <div class="top-meta">
+    <span id="lock-pill" class="badge b-idle"><span class="dot"></span>本机空闲</span>
+    <span id="conn-pill" class="badge b-pass"><span class="dot"></span>状态通道正常</span>
+    <button class="btn btn-secondary btn-sm" id="btn-history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5l3 2"/><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      历史运行
+    </button>
+  </div>
+</header>
+
+<div class="demo-bar">
+  <span class="demo-tag">原型演示</span>
+  <label for="demo-scenario" class="sr-only">选择演示场景</label>
+  <select id="demo-scenario">
+    <option value="strict">严格执行（三项全不选）· 完成</option>
+    <option value="skip">跳过版本断言 · 完成</option>
+    <option value="hwskip">跳过硬件步骤 · 部分跳过</option>
+    <option value="manual">人工执行硬件步骤 · 网页确认</option>
+    <option value="fail">步骤失败 → 立即停止</option>
+    <option value="pending">硬件状态未确认 → 待现场处理</option>
+  </select>
+  <button class="btn btn-ghost btn-sm" id="btn-disconnect">模拟断线/重连</button>
+  <button class="btn btn-ghost btn-sm" id="btn-reset">清除本机快照</button>
+  <span class="demo-hint" id="demo-hint">正式实现中不含此条；用于评审各状态分支。</span>
+</div>
+
+<main class="layout">
+
+  <!-- ======================= 左列：配置 / 选项 / 启动 ======================= -->
+  <div class="col col-left">
+
+    <section class="card" id="config-card">
+      <div class="card-head">
+        <h2>运行配置</h2>
+        <span class="head-note" id="config-state">已加载本机配置</span>
+      </div>
+      <div class="card-body">
+        <div class="field" id="f-exe">
+          <label for="cfg-exe">被测程序 EXE 路径 <span class="req" aria-hidden="true">*</span></label>
+          <input class="control mono" id="cfg-exe" spellcheck="false" />
+          <div class="err-msg" hidden><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span></span></div>
+        </div>
+        <div class="field" id="f-recipe">
+          <label for="cfg-recipe">配方目录</label>
+          <input class="control mono" id="cfg-recipe" spellcheck="false" />
+          <div class="err-msg" hidden><span></span></div>
+        </div>
+        <div class="field" id="f-evidence">
+          <label for="cfg-evidence">证据目录</label>
+          <input class="control mono" id="cfg-evidence" spellcheck="false" />
+          <div class="hint">每轮记录：manifest.json / events.jsonl / report.json 与本轮产物。</div>
+          <div class="err-msg" hidden><span></span></div>
+        </div>
+        <div class="grid-2" style="margin-bottom:var(--sp-3)">
+          <div class="field" id="f-version">
+            <label for="cfg-version">预期版本号 <span class="req" id="version-req">*</span></label>
+            <input class="control mono" id="cfg-version" spellcheck="false" />
+            <div class="err-msg" hidden><span></span></div>
+          </div>
+          <div class="field" id="f-date">
+            <label for="cfg-date">预期编译日期 <span class="req" id="date-req">*</span></label>
+            <input class="control mono" id="cfg-date" placeholder="yyyy-MM-dd" spellcheck="false" />
+            <div class="err-msg" hidden><span></span></div>
+          </div>
+        </div>
+        <div class="pw-line">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          登录凭据：<span class="ok">已配置</span>（沿用测试机本地凭据，页面不回传、不回显密码）
+        </div>
+      </div>
+      <div class="card-foot" style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" id="btn-save">保存配置</button>
+        <button class="btn btn-ghost btn-sm" id="btn-recheck">重新检查</button>
+        <span class="head-note" id="save-state" style="margin-left:auto"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>本轮运行选项</h2>
+        <span class="head-note" id="options-head">开始前可修改</span>
+      </div>
+      <div class="card-body">
+        <div class="opt-list" id="options">
+          <label class="opt" id="opt-version">
+            <input type="checkbox" id="cb-version" />
+            <span class="opt-text">
+              <strong>跳过版本断言</strong>
+              <span>01.02 记为跳过；缺少预期版本/编译日期不阻塞启动</span>
+            </span>
+          </label>
+          <label class="opt" id="opt-hwskip">
+            <input type="checkbox" id="cb-hwskip" />
+            <span class="opt-text">
+              <strong>跳过硬件步骤</strong>
+              <span>整步硬件记为跳过；混合步骤保留软件断言结果</span>
+            </span>
+          </label>
+          <label class="opt" id="opt-hwmanual">
+            <input type="checkbox" id="cb-hwmanual" />
+            <span class="opt-text">
+              <strong>人工执行硬件步骤</strong>
+              <span>硬件操作点等待网页确认后继续，仍执行后续软件断言</span>
+            </span>
+          </label>
+        </div>
+        <div class="exclusive-note">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>
+          两个硬件选项互斥，也允许都不选；三项均不选即为严格执行。
+        </div>
+        <div class="strategy" id="strategy-line">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h7"/></svg>
+          <span><strong>严格执行</strong>：版本号与编译日期核验、硬件操作与断言全部按原步骤执行。</span>
+        </div>
+      </div>
+      <div class="card-foot" style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary btn-lg btn-block" id="btn-start">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 5l12 7-12 7z"/></svg>
+          开始执行
+        </button>
+        <div class="hint-inline" id="start-hint">三项均不选：严格按 27 步执行。开始后选项冻结为快照。</div>
+      </div>
+    </section>
+
+    <section class="card" id="prep-card">
+      <div class="card-head">
+        <h2>准备检查</h2>
+        <span class="head-note" id="prep-note">尚未开始</span>
+      </div>
+      <div class="card-body tight">
+        <div class="checks" id="prep-list"></div>
+      </div>
+    </section>
+
+    <section class="card" id="runmeta-card" hidden>
+      <div class="card-head"><h2>本轮快照</h2><span class="readonly-tag" id="runmeta-tag">只读</span></div>
+      <div class="card-body tight">
+        <div class="kv" style="margin-bottom:8px"><span class="k">runId</span><span class="v mono" id="run-id">—</span></div>
+        <div class="kv" style="margin-bottom:8px"><span class="k">选项快照（运行中不可改）</span><span class="v" id="run-options">—</span></div>
+        <div class="kv"><span class="k">开始时间</span><span class="v mono" id="run-started">—</span></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======================= 中列：运行视图 ======================= -->
+  <div class="col col-main" id="col-main"></div>
+
+  <!-- ======================= 右列：步骤详情 ======================= -->
+  <div class="col col-right" id="col-right"></div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="overlay" id="overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <h3 id="modal-title">证据</h3>
+      <button class="btn btn-ghost btn-sm" id="modal-close">关闭</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   原型脚本：仅用于演示页面分支与状态，不含真实执行器、进程或后端调用
+   ========================================================================== */
+(function(){
+"use strict";
+
+/* ---------- 步骤清单（27 步，编号与名称对齐 MainFlowStepPlan 核对结果） ---------- */
+const STEP_DEFS = [
+  {id:"01.01", sec:"01", name:"启动并检查单实例及硬件状态登录窗口", hw:"partial",
+   desc:"以配置的 EXE 启动被测软件，检查单实例与登录窗口出现，读取硬件状态区，并确认本轮拥有该进程。",
+   assert:["被测进程由本轮创建，PID 与启动身份一致","无同名冲突进程（单实例检查通过）","登录窗口与硬件状态区可定位"]},
+  {id:"01.02", sec:"01", name:"登录后核对软件版本和编译日期并截图", hw:false, delayed:true,
+   desc:"登录完成后读取软件版本号与编译日期，与配置的预期值断言一致，并保存核对截图。",
+   assert:["版本号 = 预期版本号","编译日期 = 预期编译日期","核对截图已保存为本轮证据"]},
+
+  {id:"02.01", sec:"02", name:"选择 admin 并登录", hw:false,
+   desc:"在登录窗口选择 admin 账号，使用本机本地凭据登录；页面与日志不出现密码。",
+   assert:["账号确认为 admin","登录成功并进入主界面"]},
+  {id:"02.02", sec:"02", name:"处理启动初始化及回零提示", hw:"full",
+   desc:"处理启动初始化与回零提示；提示出现时按原用例条件确认并触发回零，不盲目确认。",
+   assert:["初始化完成","回零提示按既有条件处理","回零动作已触发"]},
+
+  {id:"03.01", sec:"03", name:"放片及工位空片检查", hw:"manualOnly",
+   desc:"原用例明确要求现场参与的物理准备点：放片并检查工位空片，记录本轮开始时间；本工具不承诺自动完成。",
+   assert:["现场确认已放片且工位无残留片","本轮开始时间已记录"]},
+  {id:"03.02", sec:"03", name:"任务晶圆分布页选择 Loadport1", hw:"partial",
+   desc:"在任务晶圆分布页选择 Loadport1，并核对界面槽位状态与实物一致。",
+   assert:["Loadport1 选择生效","界面槽位状态可读且与实物一致"]},
+
+  {id:"04.01", sec:"04", name:"打开新建配方窗口", hw:"partial",
+   desc:"打开新建配方窗口；平台无片/吸附提示按既有条件判断处理，不盲目确认。",
+   assert:["新建配方窗口可定位","无片/吸附提示按原用例条件处理"]},
+  {id:"04.02", sec:"04", name:"文件类型选配方文件并回读", hw:false,
+   desc:"文件类型选择“配方文件”，失焦后回读界面显示值。",
+   assert:["文件类型选择生效","回读值与选择一致"]},
+  {id:"04.03", sec:"04", name:"输入带秒级时间戳的配方名称并回读", hw:false,
+   desc:"输入带秒级时间戳的配方名称并回读；名称在本轮唯一，不覆盖既有配方。",
+   assert:["名称含秒级时间戳","回读值与输入一致","名称未被既有配方占用"]},
+  {id:"04.04", sec:"04", name:"创建位置选根目录并回读", hw:false,
+   desc:"创建位置选择根目录，失焦后回读界面显示值。",
+   assert:["创建位置为根目录","回读值与选择一致"]},
+  {id:"04.05", sec:"04", name:"选择常规建档模式并回读", hw:false,
+   desc:"选择常规建档模式，失焦后回读界面显示值。",
+   assert:["建档模式为常规","回读值与选择一致"]},
+  {id:"04.06", sec:"04", name:"选择 300 和 Notch 并回读", hw:false,
+   desc:"选择晶圆尺寸 300 与缺口类型 Notch，失焦后回读界面显示值。",
+   assert:["晶圆尺寸为 300","缺口类型为 Notch","回读值与选择一致"]},
+  {id:"04.07", sec:"04", name:"确定新建并检查配方树、当前配方及落盘", hw:false,
+   desc:"确定新建，核对配方树出现新配方、当前配方切换正确，并确认配方文件已落盘。",
+   assert:["配方树出现本轮配方","当前配方为新建配方","配方文件已落盘"]},
+
+  {id:"05.01", sec:"05", name:"打开晶圆信息页并选择正面 2D 检测", hw:false,
+   desc:"进入晶圆信息页并选择正面 2D 检测。",
+   assert:["晶圆信息页可定位","检测类型为正面 2D"]},
+  {id:"05.02", sec:"05", name:"输入产品 ID 和工序 ID 并回读", hw:false,
+   desc:"输入产品 ID 与工序 ID，失焦提交后回读界面显示值。",
+   assert:["两项输入成功","回读值与输入一致"]},
+  {id:"05.03", sec:"05", name:"取消仿真模式", hw:false,
+   desc:"取消仿真模式，确认真实检测路径生效。",
+   assert:["仿真模式已取消"]},
+  {id:"05.04", sec:"05", name:"选择注水和清洗次数 1", hw:false,
+   desc:"开启注水并选择清洗次数 1。",
+   assert:["注水已开启","清洗次数为 1"]},
+  {id:"05.05", sec:"05", name:"输入注水冲洗时间并回读", hw:false,
+   desc:"输入注水冲洗时间，失焦后回读。",
+   assert:["输入成功","回读值与输入一致"]},
+  {id:"05.06", sec:"05", name:"输入注水后吸水时间并回读", hw:false,
+   desc:"输入注水后吸水时间，失焦后回读。",
+   assert:["输入成功","回读值与输入一致"]},
+  {id:"05.07", sec:"05", name:"输入吸附晶圆后的吸水时间并回读", hw:false,
+   desc:"输入吸附晶圆后的吸水时间，失焦后回读。",
+   assert:["输入成功","回读值与输入一致"]},
+  {id:"05.08", sec:"05", name:"输入吸附晶圆的真空时间并回读", hw:false,
+   desc:"输入吸附晶圆的真空时间，失焦后回读。",
+   assert:["输入成功","回读值与输入一致"]},
+  {id:"05.09", sec:"05", name:"处理风刀字段并保存配方 A", hw:false,
+   desc:"按既有条件处理风刀字段，保存配方 A 并确认保存生效。",
+   assert:["风刀字段按原用例处理","保存成功","配方 A 可再次读取"]},
+
+  {id:"06.01", sec:"06", name:"任务晶圆分布页选择 Loadport1 层 1", hw:"full",
+   desc:"在任务晶圆分布页选择 Loadport1 第 1 层，核对槽位与实物一致。",
+   assert:["层 1 选择生效","槽位与实物一致"]},
+  {id:"06.02", sec:"06", name:"选择关闭读码和对准角 0", hw:false,
+   desc:"关闭读码并将对准角设为 0。",
+   assert:["读码已关闭","对准角为 0"]},
+  {id:"06.03", sec:"06", name:"确认一键上片按钮", hw:"full",
+   desc:"确认一键上片并发起上片；人工策略下改为现场执行后在网页确认，后续状态断言仍必须执行。",
+   assert:["一键上片动作已发起","提示处理符合原用例"]},
+  {id:"06.04", sec:"06", name:"等待上片完成并核对平台及来源槽位", hw:"full",
+   desc:"等待上片完成，核对平台有片、来源槽位与机械手状态；不以点击或等待时间推断成功。",
+   assert:["平台有片状态可观察","来源槽位与选择一致","无阻断报警"]},
+  {id:"06.05", sec:"06", name:"点击配方确认当前配方仍为 A", hw:false,
+   desc:"在校验入口点击配方，确认当前配方仍为 A。",
+   assert:["当前配方仍为 A"]}
+];
+
+const SECTIONS = {
+  "01":"启动",
+  "02":"登录",
+  "03":"放片",
+  "04":"新建配方 A",
+  "05":"晶圆信息",
+  "06":"建档上片"
+};
+
+/* ---------- 状态定义（与需求 7.1 一一对应） ---------- */
+const ST = {
+  notrun:      {label:"未执行",            cls:"b-neutral",  row:"",               desc:"未开始，不等同跳过"},
+  running:     {label:"执行中",            cls:"b-running",  row:"current",        desc:"当前步骤，显示开始时间与耗时"},
+  waiting:     {label:"等待人工确认",      cls:"b-waiting",  row:"st-waiting-row", desc:"等待现场操作，不等于阻塞或成功"},
+  pass:        {label:"成功",              cls:"b-pass",     row:"",               desc:"自动断言通过"},
+  passManual:  {label:"成功·人工确认",     cls:"b-manual",   row:"",               desc:"现场确认后通过，非全自动"},
+  skipPartial: {label:"跳过·部分硬件",     cls:"b-skip",     row:"",               desc:"软件断言通过，硬件部分未执行"},
+  skipHardware:{label:"跳过·整步硬件",     cls:"b-skip",     row:"",               desc:"整步硬件按选项跳过"},
+  skipRequested:{label:"跳过·明确要求",    cls:"b-skip",     row:"",               desc:"如本轮选择跳过版本断言"},
+  blocked:     {label:"阻塞",              cls:"b-blocked",  row:"st-blocked-row", desc:"条件/能力/确认无法满足，必须给原因"},
+  failed:      {label:"失败",              cls:"b-failed",   row:"st-failed-row",  desc:"断言或执行异常，保留原始原因"},
+  unknown:     {label:"中断·结果未知",     cls:"b-unknown",  row:"st-blocked-row", desc:"执行器异常终止，不推断为业务失败"}
+};
+
+const PHASES = [
+  {k:"prepare",  label:"准备"},
+  {k:"execute",  label:"执行"},
+  {k:"wait",     label:"等待人工"},
+  {k:"cleanup",  label:"清理"},
+  {k:"done",     label:"结束"}
+];
+
+/* ---------- 工具 ---------- */
+const $ = (s)=>document.querySelector(s);
+const pad2 = (n)=>String(n).padStart(2,"0");
+const nowHM = (d)=>{d=d||new Date();return pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds());};
+const nowStamp = (d)=>{d=d||new Date();return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+nowHM(d);};
+const nowISO = ()=>new Date().toISOString();
+const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
+const esc = (s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtDur = (ms)=>{
+  if(ms==null) return "—";
+  if(ms<1000) return ms+" ms";
+  const s=Math.round(ms/1000);
+  if(s<60) return s+" s";
+  const m=Math.floor(s/60);
+  return m+" 分 "+pad2(s%60)+" 秒";
+};
+const shortId = ()=> "run-"+new Date().toISOString().replace(/[-:TZ.]/g,"").slice(0,14)+"-"+Math.random().toString(16).slice(2,6);
+
+/* ---------- 初始状态 ---------- */
+const LS_KEY = "waoi-mainflow-ui-prototype-v1";
+const DEFAULT_CONFIG = {
+  exe:"D:\\WaferAOI\\WaferAOI.exe",
+  recipe:"D:\\WaferAOI\\Recipes",
+  evidence:"D:\\WaferAoiUitest\\runs",
+  version:"V3.2.1.7",
+  buildDate:"2026-10-12"
+};
+
+const state = {
+  view:"current",            // current | history | historyDetail
+  historyRunId:null,
+  config:{...DEFAULT_CONFIG},
+  errors:{},
+  options:{skipVersion:false, hw:"strict"},  // hw: strict | skip | manual
+  run:null,
+  selectedStep:null,
+  connection:"online",       // online | lost | recovering
+  demoScenario:"strict",
+  history:[],
+  note:"",
+  saving:false,
+  ticker:null
+};
+
+/* 演示用历史记录（正式实现从 /api/runs 读取） */
+function seedHistory(){
+  return [
+    {
+      id:"run-20261023-101502-9f3a",
+      startedAt:"2026-10-23 10:15:02",
+      options:{skipVersion:false, hw:"strict"},
+      phase:"done",
+      conclusion:{kind:"pass", title:"01—06 执行完成（严格执行）",
+        detail:"27 步全部成功（其中 03.01 为现场确认 1 步）；清理完成，机器占用已释放。"},
+      cleanup:{state:"done", text:"清理完成：本轮进程已退出，占用已释放"},
+      counts:{pass:27, skip:0, blocked:0, failed:0, notrun:0, waiting:0, unknown:0},
+      artifacts:"runs/run-20261023-101502-9f3a"
+    },
+    {
+      id:"run-20261023-093047-11c7",
+      startedAt:"2026-10-23 09:30:47",
+      options:{skipVersion:true, hw:"manual"},
+      phase:"done",
+      conclusion:{kind:"pass", title:"01—06 执行完成（人工执行硬件步骤）",
+        detail:"成功 26（其中人工确认 8）、跳过 1（版本断言 01.02）、阻塞 0、失败 0、未执行 0；清理完成。"},
+      cleanup:{state:"done", text:"清理完成：本轮进程已退出，占用已释放"},
+      counts:{pass:26, skip:1, blocked:0, failed:0, notrun:0, waiting:0, unknown:0},
+      artifacts:"runs/run-20261023-093047-11c7"
+    },
+    {
+      id:"run-20261022-174512-27ab",
+      startedAt:"2026-10-22 17:45:12",
+      options:{skipVersion:false, hw:"strict"},
+      phase:"pending",
+      conclusion:{kind:"pending", title:"待现场处理：硬件状态未确认",
+        detail:"步骤 06.04 阻塞；硬件安全状态未确认，已保留本轮被测程序并维持机器占用。"},
+      cleanup:{state:"pending", text:"待现场处理：被测程序保留，占用未释放"},
+      counts:{pass:25, skip:0, blocked:1, failed:0, notrun:1, waiting:0, unknown:0},
+      artifacts:"runs/run-20261022-174512-27ab"
+    }
+  ];
+}
+
+/* ---------- 持久化（演示刷新恢复） ---------- */
+function persist(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      config:state.config, options:state.options, run:state.run,
+      history:state.history, selectedStep:state.selectedStep, note:state.note
+    }));
+  }catch(e){/* 原型忽略 */}
+}
+function restore(){
+  let raw=null;
+  try{raw=localStorage.getItem(LS_KEY);}catch(e){}
+  if(!raw) return false;
+  try{
+    const p=JSON.parse(raw);
+    if(p.config) state.config={...state.config,...p.config};
+    if(p.options) state.options=p.options;
+    if(Array.isArray(p.history)&&p.history.length) state.history=p.history;
+    if(p.run){
+      state.run=p.run; state.selectedStep=p.selectedStep; state.note=p.note||"";
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+/* ---------- 运行模型 ---------- */
+function buildSteps(){
+  return STEP_DEFS.map(d=>({
+    id:d.id, sec:d.sec, name:d.name, hw:d.hw, desc:d.desc, assert:d.assert.slice(),
+    delayed:!!d.delayed,
+    status:"notrun", reason:"", startedAt:null, durationMs:null,
+    logs:[], artifacts:[], manual:false
+  }));
+}
+
+function createRun(opts){
+  const run={
+    id:shortId(),
+    startedAt:new Date(),
+    startedLabel:nowStamp(),
+    options:{skipVersion:!!opts.skipVersion, hw:opts.hw||"strict"},
+    phase:"prepare",
+    prep:[], steps:buildSteps(),
+    events:[], seq:0,
+    checkpoint:null,
+    cleanup:{state:"idle", text:"未开始"},
+    conclusion:null,
+    note:"",
+    scenario:state.demoScenario,
+    finished:false,
+    token:Date.now()
+  };
+  return run;
+}
+
+function pushEvent(run, type, extra){
+  run.seq++;
+  const ev={seq:run.seq, at:nowISO(), type, ...extra};
+  run.events.push(ev);
+  return ev;
+}
+
+function stepById(run, id){ return run.steps.find(s=>s.id===id); }
+
+function setStep(run, step, status, reason, extra){
+  const prev=step.status;
+  step.status=status;
+  step.reason=reason||"";
+  if(status==="running"){
+    step.startedAt=Date.now();
+    step.durationMs=null;
+  }
+  if(["pass","passManual","skipPartial","skipHardware","skipRequested","blocked","failed"].includes(status)){
+    if(step.startedAt) step.durationMs=Date.now()-step.startedAt;
+    else step.durationMs=0;
+  }
+  if(extra&&extra.artifacts) step.artifacts=extra.artifacts;
+  const logMsg = extra&&extra.log;
+  if(logMsg) step.logs.push(logMsg);
+  pushEvent(run, "step."+status, {stepId:step.id, phase:status, reason:step.reason});
+  renderAll();
+}
+
+function stepLog(step, level, msg){
+  step.logs.push({t:nowHM(), level:level||"INFO", msg});
+}
+
+/* 产出该步骤的演示证据与日志 */
+function makeEvidence(run, step, mode){
+  const base = step.id.replace(".","_");
+  const art=[
+    {id:"a-"+base+"-1", name:base+"_assert.png", kind:"png", size:"248 KB", missing:false},
+    {id:"a-"+base+"-2", name:base+"_tree.json", kind:"json", size:"96 KB", missing:false}
+  ];
+  if(mode==="failed"){
+    art.push({id:"a-"+base+"-3", name:base+"_exception.png", kind:"png", size:"301 KB", missing:false});
+    art.push({id:"a-"+base+"-4", name:base+"_diagnostics.log", kind:"txt", size:"18 KB", missing:false});
+  }
+  stepLog(step,"INFO","UIA 定位完成：步骤 "+step.id+" 进入断言阶段");
+  return art;
+}
+
+/* ---------- 场景执行 ---------- */
+async function runScenario(run){
+  const token=run.token;
+  const alive=()=>state.run && state.run.token===token;
+  const scenario=run.scenario;
+  const opt=run.options;
+  const soft=()=>sleep(520+Math.random()*380);
+
+  /* 准备阶段 */
+  run.phase="prepare";
+  renderAll();
+  await sleep(240); if(!alive())return;
+  run.prep=[
+    {k:"管理员权限", s:"pass", d:"已提升"},
+    {k:"无同名被测进程", s:"pass", d:"未发现冲突进程"},
+    {k:"被测 EXE 与目录", s:"pass", d:"路径存在、目录可写"},
+    {k:"预期版本/编译日期", s: opt.skipVersion?"skip":"pass", d: opt.skipVersion?"本轮跳过版本断言，不作为启动必填":"已填写"},
+    {k:"本机运行锁", s:"pass", d:"已获取本轮占用"}
+  ];
+  pushEvent(run,"run.prepared",{});
+  await sleep(420); if(!alive())return;
+
+  /* 执行阶段 */
+  run.phase="execute";
+  renderAll();
+
+  for(let i=0;i<run.steps.length;i++){
+    if(!alive()) return;
+    const step=run.steps[i];
+    if(step.status!=="notrun") continue;   // 已收敛步骤不重复执行（刷新恢复）
+
+    /* 01.02 延后语义：仅标签提示，顺序按真实事件 */
+    if(step.id==="01.02" && opt.skipVersion){
+      stepLog(step,"INFO","本轮选择跳过版本断言，不读取预期版本与编译日期");
+      setStep(run, step, "skipRequested", "本轮选择跳过版本断言（版本号及编译日期）");
+      await sleep(140); continue;
+    }
+
+    /* 硬件策略：跳过 */
+    if(opt.hw==="skip" && (step.hw==="full"||step.hw==="partial"||step.hw==="manualOnly")){
+      if(step.hw==="full"||step.hw==="manualOnly"){
+        setStep(run, step, "skipHardware", "本轮选择跳过硬件步骤：整步硬件操作与断言未执行");
+      }else{
+        stepLog(step,"INFO","软件断言分支执行完成，硬件检查按本轮选项跳过");
+        setStep(run, step, "skipPartial", "软件断言通过；硬件部分未执行（本轮选择跳过硬件步骤）");
+      }
+      await sleep(160); continue;
+    }
+
+    /* 开始执行 */
+    setStep(run, step, "running", "");
+    stepLog(step,"INFO","步骤开始");
+    renderAll();
+    await soft(); if(!alive())return;
+
+    /* 场景注入：失败 */
+    if(scenario==="fail" && step.id==="04.03"){
+      stepLog(step,"ERR","断言失败：配方名称回读值缺少秒级时间戳，与输入值不一致");
+      step.artifacts=makeEvidence(run,step,"failed");
+      setStep(run, step, "failed", "断言失败：配方名称回读不一致（界面值与输入值不同）");
+      pushEvent(run,"run.stopping",{reason:"步骤 04.03 失败，停止本轮调度"});
+      run.conclusion={kind:"fail", title:"本轮未通过：04.03 配方名称回读失败",
+        detail:"已在失败步骤立即停止；后续步骤保持未执行，随后进入清理阶段。"};
+      await finishRun(run, "failed");
+      return;
+    }
+
+    /* 场景注入：06.04 阻塞 → 待现场处理 */
+    if(scenario==="pending" && step.id==="06.04"){
+      stepLog(step,"WARN","等待搬片结束超时，平台有片状态不可读");
+      setStep(run, step, "blocked", "硬件状态无法确认：平台有片状态不可读，来源槽位无法核验");
+      pushEvent(run,"run.stopping",{reason:"步骤 06.04 阻塞，停止本轮调度"});
+      run.conclusion={kind:"pending", title:"待现场处理：硬件状态未确认",
+        detail:"步骤 06.04 阻塞；按策略保留本轮被测程序与占用，需现场按规程处理后再提交确认。"};
+      await finishRun(run, "pending");
+      return;
+    }
+
+    /* 人工点：硬件策略=manual 的硬件步骤，或原用例人工点（03.01） */
+    const isManual = step.hw==="manualOnly" || (opt.hw==="manual" && (step.hw==="full"||step.hw==="partial"));
+    if(isManual){
+      const cpId="cp-"+step.id.replace(".","")+"-"+Math.random().toString(16).slice(2,6);
+      run.checkpoint={id:cpId, stepId:step.id, startedAt:Date.now(), startedLabel:nowStamp(),
+        note:"", error:"", title: step.hw==="manualOnly" ? "原用例人工操作点" : "人工执行硬件步骤",
+        instructions: step.hw==="manualOnly"
+          ? ["按原用例要求完成现场放片并检查工位空片","确认工位无残留片、槽位与实物一致后在下方填写备注","点击“完成”仅表示现场已操作，软件断言仍会继续执行"]
+          : ["按步骤说明在设备上完成该硬件操作","确认设备状态符合原用例前提","点击“完成”后将继续执行软件断言"]};
+      run.phase="wait";
+      setStep(run, step, "waiting", "等待网页人工确认（已操作 / 阻塞 / 失败）");
+      step.manual=true;
+      pushEvent(run,"step.waiting",{stepId:step.id, checkpointId:cpId});
+      renderAll();
+      const result=await waitCheckpoint(run);
+      if(!alive()) return;
+      if(result.result==="blocked"){
+        setStep(run, step, "blocked", "现场确认阻塞："+ (result.note||"未填写原因"));
+        run.conclusion={kind:"fail", title:"本轮未通过：现场确认阻塞",
+          detail:"步骤 "+step.id+" 由现场确认阻塞，已停止本轮调度并进入清理。"};
+        await finishRun(run,"failed"); return;
+      }
+      if(result.result==="failed"){
+        setStep(run, step, "failed", "现场确认失败："+(result.note||"未填写原因"));
+        run.conclusion={kind:"fail", title:"本轮未通过：现场确认失败",
+          detail:"步骤 "+step.id+" 现场判定失败，已停止本轮调度并进入清理。"};
+        await finishRun(run,"failed"); return;
+      }
+      stepLog(step,"INFO","现场确认完成，继续执行软件断言");
+      run.phase="execute";
+      await soft(); if(!alive())return;
+      step.artifacts=makeEvidence(run,step);
+      setStep(run, step, "passManual", "现场已操作并确认；软件断言通过（非全自动）");
+      run.checkpoint=null;
+      continue;
+    }
+
+    /* 常规步骤结果 */
+    const artifacts=makeEvidence(run,step);
+    setStep(run, step, "pass", "", {artifacts});
+    await sleep(120);
+  }
+
+  if(!alive()) return;
+  run.conclusion={kind:"pass", title:"01—06 执行完成",
+    detail:buildPassDetail(run)};
+  await finishRun(run,"pass");
+}
+
+function buildPassDetail(run){
+  const c=countSteps(run);
+  const opt=optLabel(run.options);
+  const extras=[];
+  if(run.options.skipVersion) extras.push("01.02 跳过版本断言");
+  if(run.options.hw==="skip") extras.push("硬件步骤按跳过记录");
+  if(run.options.hw==="manual") extras.push("硬件步骤由现场确认后继续");
+  return "策略："+opt+"。成功 "+c.pass+"、跳过 "+c.skip+"、阻塞 "+c.blocked+"、失败 "+c.failed+"、未执行 "+c.notrun+
+    (extras.length?"；"+extras.join("；"):"")+"。本期 27 步完成，完整设计 184 步，其余 157 步未实现。";
+}
+
+async function finishRun(run, kind){
+  run.phase="cleanup";
+  run.cleanup={state:"running", text:"清理中：核对本轮进程与占用…"};
+  pushEvent(run,"cleanup.started",{});
+  renderAll();
+  await sleep(520);
+  if(kind==="pending"){
+    run.phase="pending";
+    run.cleanup={state:"pending", text:"待现场处理：硬件状态未确认，本轮被测程序保留，机器占用未释放"};
+    pushEvent(run,"field.pending",{reason:"硬件安全状态未确认"});
+    run.finished=false;
+  }else{
+    run.cleanup={state:"done", text:"清理完成：本轮进程已退出，无冲突进程，占用已释放"};
+    run.phase="done";
+    run.finished=true;
+    pushEvent(run,"cleanup.done",{});
+    pushEvent(run,"run.finished",{conclusion:kind});
+    archiveRun(run);
+  }
+  renderAll();
+}
+
+function archiveRun(run){
+  if(state.history.some(h=>h.id===run.id)) return;
+  const c=countSteps(run);
+  state.history.unshift({
+    id:run.id, startedAt:run.startedLabel, options:{...run.options}, phase:run.phase,
+    conclusion:run.conclusion, cleanup:run.cleanup, counts:{pass:c.pass,skip:c.skip,blocked:c.blocked,failed:c.failed,notrun:c.notrun,waiting:c.waiting,unknown:c.unknown},
+    artifacts:"runs/"+run.id
+  });
+}
+
+/* ---------- 人工确认等待 ---------- */
+let cpResolver=null;
+function waitCheckpoint(run){
+  return new Promise(resolve=>{ cpResolver=resolve; });
+}
+function submitCheckpoint(result){
+  const run=state.run;
+  if(!run||!run.checkpoint||!cpResolver) return;
+  const cp=run.checkpoint;
+  if(result!=="done" && !state.note.trim()){
+    cp.error="选择“阻塞”或“失败”时必须填写原因";
+    renderAll();
+    return;
+  }
+  const note=state.note.trim();
+  pushEvent(run,"checkpoint.confirmed",{stepId:cp.stepId, checkpointId:cp.id, result, reason:note});
+  state.note="";
+  const resolve=cpResolver; cpResolver=null;
+  const step=stepById(run,cp.stepId);
+  step.logs.push({t:nowHM(), level:"INFO", msg:"网页确认结果："+({done:"完成",blocked:"阻塞",failed:"失败"}[result])+(note?"（备注："+note+"）":"")});
+  run.checkpoint=null;
+  renderAll();
+  resolve({result:result, note:note, checkpointId:cp.id});
+}
+
+/* ---------- 计数 ---------- */
+function countSteps(run){
+  const c={pass:0,skip:0,blocked:0,failed:0,notrun:0,waiting:0,unknown:0,manual:0};
+  run.steps.forEach(s=>{
+    if(s.status==="pass"){c.pass++;}
+    else if(s.status==="passManual"){c.pass++;c.manual++;}
+    else if(["skipPartial","skipHardware","skipRequested"].includes(s.status)) c.skip++;
+    else if(s.status==="blocked") c.blocked++;
+    else if(s.status==="failed") c.failed++;
+    else if(s.status==="waiting"){c.waiting++;}
+    else if(s.status==="unknown") c.unknown++;
+    else c.notrun++;
+  });
+  return c;
+}
+
+function optLabel(o){
+  const hw = o.hw==="skip" ? "跳过硬件步骤" : o.hw==="manual" ? "人工执行硬件步骤" : "硬件严格按步骤";
+  return (o.skipVersion?"跳过版本断言":"版本断言严格")+" · "+hw;
+}
+
+/* ==========================================================================
+   渲染
+   ========================================================================== */
+function renderAll(){
+  state.errors=computeErrors();
+  renderTopbar();
+  renderConfig();
+  renderOptions();
+  renderPrep();
+  renderRunMeta();
+  renderMain();
+  renderRight();
+  persist();
+}
+
+function renderTopbar(){
+  const run=state.run;
+  const busy = run && (run.phase==="prepare"||run.phase==="execute"||run.phase==="wait"||run.phase==="cleanup");
+  const pending = run && run.phase==="pending";
+  const lock=$("#lock-pill");
+  if(pending){lock.className="badge b-lock";lock.innerHTML='<span class="dot"></span>本机占用 · 待现场处理';}
+  else if(busy){lock.className="badge b-lock";lock.innerHTML='<span class="dot"></span>本机占用 · 执行中';}
+  else {lock.className="badge b-idle";lock.innerHTML='<span class="dot"></span>本机空闲';}
+
+  const conn=$("#conn-pill");
+  if(state.connection==="lost"){
+    conn.className="badge b-blocked";conn.innerHTML='<span class="dot"></span>状态连接中断';
+  }else if(state.connection==="recovering"){
+    conn.className="badge b-waiting";conn.innerHTML='<span class="spin"></span>正在补齐事件…';
+  }else{
+    conn.className="badge b-pass";conn.innerHTML='<span class="dot"></span>状态通道正常';
+  }
+
+  $("#btn-history").textContent = state.view==="current" ? "历史运行" : "返回当前运行";
+}
+
+/* 配置 */
+function renderConfig(){
+  const running = state.run && !state.run.finished && state.run.phase!=="done";
+  const locked = !!running;
+  const c=state.config;
+  $("#cfg-exe").value=c.exe;
+  $("#cfg-recipe").value=c.recipe;
+  $("#cfg-evidence").value=c.evidence;
+  $("#cfg-version").value=c.version;
+  $("#cfg-date").value=c.buildDate;
+  [["#cfg-exe","#f-exe"],["#cfg-recipe","#f-recipe"],["#cfg-evidence","#f-evidence"],["#cfg-version","#f-version"],["#cfg-date","#f-date"]].forEach(([i,f])=>{
+    $(i).disabled=locked;
+    const wrap=$(f), err=wrap.querySelector(".err-msg");
+    const msg=state.errors[wrap.id];
+    if(msg){
+      wrap.classList.add("has-error"); err.hidden=false; err.querySelector("span").textContent=msg;
+    }else{
+      wrap.classList.remove("has-error"); err.hidden=true;
+    }
+  });
+  $("#version-req").style.display = state.options.skipVersion ? "none":"inline";
+  $("#date-req").style.display = state.options.skipVersion ? "none":"inline";
+  $("#config-state").textContent = locked ? "运行中只读（本轮快照）" : "已加载本机配置";
+  [".btn#btn-save","#btn-recheck"].forEach(s=>{const el=$(s); if(el) el.disabled=locked;});
+  $("#btn-save").disabled=locked;
+  $("#btn-recheck").disabled=locked;
+}
+
+/* 选项 */
+function renderOptions(){
+  const running = state.run && !state.run.finished && state.run.phase!=="done";
+  const locked = !!running;
+  const o=state.options;
+  const cbV=$("#cb-version"), cbS=$("#cb-hwskip"), cbM=$("#cb-hwmanual");
+  cbV.checked=o.skipVersion; cbS.checked=o.hw==="skip"; cbM.checked=o.hw==="manual";
+  [cbV,cbS,cbM].forEach(cb=>cb.disabled=locked);
+  [["#opt-version",o.skipVersion],["#opt-hwskip",o.hw==="skip"],["#opt-hwmanual",o.hw==="manual"]].forEach(([s,on])=>{
+    const el=$(s); el.classList.toggle("checked",on); el.classList.toggle("disabled",locked);
+  });
+  $("#options-head").textContent = locked ? "本轮已冻结" : "开始前可修改";
+  $("#strategy-line").innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h7"/></svg><span>'+strategyText()+"</span>";
+
+  /* 开始按钮 */
+  const btn=$("#btn-start");
+  let hint="";
+  let disabled=false;
+  if(locked || (state.run && state.run.phase==="pending")){
+    disabled=true;
+    hint = state.run.phase==="pending"
+      ? "本机处于待现场处理状态，完成现场处理并核验前禁止新一轮。"
+      : "本轮进行中，选项与配置已冻结；同一时刻只允许一轮。";
+  }
+  const cfgErr = validateConfig(true);
+  if(!disabled && cfgErr){
+    hint = "配置未通过检查：" + cfgErr;
+  }
+  btn.disabled=disabled;
+  $("#start-hint").textContent = hint || "开始后创建 runId、冻结本轮选项，仅启动主流程执行器。";
+
+  if(locked || (state.run && state.run.phase==="pending")){
+    $("#btn-start").querySelector("svg").style.display="";
+  }
+}
+
+function strategyText(){
+  const o=state.options;
+  if(!o.skipVersion && o.hw==="strict") return "<strong>严格执行</strong>：版本号与编译日期核验、硬件操作与断言全部按原步骤执行。";
+  if(o.skipVersion && o.hw==="strict") return "<strong>跳过版本断言</strong>：01.02 记为跳过；版本号与编译日期的缺失不阻塞启动，硬件仍严格执行。";
+  if(!o.skipVersion && o.hw==="skip") return "<strong>跳过硬件步骤</strong>：版本号与编译日期照常核验；整步硬件记为跳过，混合步骤保留软件断言结果。";
+  if(o.skipVersion && o.hw==="skip") return "<strong>跳过版本断言 + 跳过硬件步骤</strong>：01.02 跳过；硬件步骤跳过，混合步骤保留软件断言。";
+  if(!o.skipVersion && o.hw==="manual") return "<strong>人工执行硬件步骤</strong>：版本核验照常；硬件操作点等待网页确认后继续，仍执行软件断言。";
+  return "<strong>跳过版本断言 + 人工执行硬件步骤</strong>：01.02 跳过；硬件操作点等待网页确认后继续。";
+}
+
+/* 准备检查 */
+function renderPrep(){
+  const run=state.run;
+  const box=$("#prep-list");
+  if(!run){
+    box.innerHTML='<div class="check-row idle"><span class="ci">·</span><div>尚未开始：开始执行后显示本机准备检查结果。<div class="cd">准备检查结果作为运行准备记录展示，不计作用例步骤通过。</div></div></div>';
+    $("#prep-note").textContent="尚未开始";
+    return;
+  }
+  $("#prep-note").textContent = run.phase==="prepare" ? "检查中…" : "已记录";
+  box.innerHTML = run.prep.map(p=>{
+    const cls = p.s==="pass"?"pass":p.s==="fail"?"fail":"idle";
+    const mark = p.s==="pass"?"✓":p.s==="fail"?"!":"–";
+    return '<div class="check-row '+cls+'"><span class="ci">'+mark+'</span><div>'+esc(p.k)+'<div class="cd">'+esc(p.d)+"</div></div></div>";
+  }).join("") || '<div class="check-row idle"><span class="ci">·</span><div>准备检查进行中…</div></div>';
+  if(!run.prep.some(p=>p.k==="本机运行锁")){
+    box.innerHTML+='<div class="check-row idle"><span class="ci">…</span><div>本机运行锁<div class="cd">正在获取本轮占用</div></div></div>';
+  }
+}
+
+/* 本轮快照 */
+function renderRunMeta(){
+  const card=$("#runmeta-card");
+  if(!state.run || state.view!=="current"){card.hidden=true;return;}
+  card.hidden=false;
+  $("#run-id").textContent=state.run.id;
+  $("#run-options").textContent=optLabel(state.run.options);
+  $("#run-started").textContent=state.run.startedLabel;
+  $("#runmeta-tag").textContent = state.run.finished ? "上一轮 · 只读" : "只读";
+}
+
+/* ============================ 中列 ============================ */
+function renderMain(){
+  const main=$("#col-main");
+  if(state.view==="history"){ main.innerHTML=historyView(); bindMain(); return; }
+  if(state.view==="historyDetail"){ main.innerHTML=historyDetailView(); bindMain(); return; }
+
+  const run=state.run;
+  main.innerHTML =
+    (state.connection!=="online" ? connBanner() : "") +
+    summaryCard(run) +
+    (run&&run.checkpoint ? checkpointCard(run) : "") +
+    (run&&run.phase==="pending" ? pendingCard(run) : "") +
+    stepsCard(run) +
+    conclusionCard(run);
+  bindMain();
+}
+
+function connBanner(){
+  if(state.connection==="recovering"){
+    return '<div class="banner info"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/></svg><div><span class="bt">正在补齐事件…</span> 以 runId 与 sequence 去重，恢复后与本轮持久化记录一致，不重新执行步骤。</div></div>';
+  }
+  return '<div class="banner warn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div><span class="bt">状态连接中断</span> 执行器可能仍在运行；连接失败不等于测试失败，页面正按 runId 重连。</div></div>';
+}
+
+function summaryCard(run){
+  const c = run ? countSteps(run) : {pass:0,skip:0,blocked:0,failed:0,notrun:27,waiting:0,unknown:0,manual:0};
+  const done = c.pass+c.skip+c.blocked+c.failed;
+  const total=27;
+  const pct = (n)=> (n/total*100).toFixed(2)+"%";
+  const phase = run? run.phase : "idle";
+  const phaseIdx = phase==="pending" ? 3 : ({idle:-1,prepare:0,execute:1,wait:2,cleanup:3,done:4})[phase];
+  const stHtml = PHASES.map((p,i)=>{
+    let cls="";
+    if(phase==="pending"){ cls = (i<=2)?"done":"pending-field"; }
+    else if(i<phaseIdx) cls="done"; else if(i===phaseIdx) cls="active";
+    const label = (phase==="pending" && i===3) ? "待现场处理" : p.label;
+    return (i?'<span class="step-sep"></span>':'')+'<span class="step-item '+cls+'"><span class="idx">'+(cls==="done"?"✓":i+1)+"</span>"+label+"</span>";
+  }).join("");
+
+  return '<section class="card"><div class="card-body"><div class="summary">'+
+    '<div class="stepper">'+stHtml+'</div>'+
+    '<div class="summary-top"><div class="progress-wrap">'+
+      '<div class="progress-meta">'+
+        '<strong>'+done+' / '+total+'</strong><span>已收敛步骤（分母为本期 27 步，不是 184 步）</span>'+
+        (c.waiting?'<span class="badge b-waiting" style="margin-left:auto"><span class="spin"></span>等待人工 '+c.waiting+"</span>":"")+
+        (c.unknown?'<span class="badge b-unknown">中断·结果未知 '+c.unknown+"</span>":"")+
+      "</div>"+
+      '<div class="progress" role="img" aria-label="已完成 '+done+' 步，共 27 步">'+
+        '<i class="seg-pass" style="width:'+pct(c.pass)+'"></i>'+
+        '<i class="seg-skip" style="width:'+pct(c.skip)+'"></i>'+
+        '<i class="seg-blocked" style="width:'+pct(c.blocked)+'"></i>'+
+        '<i class="seg-failed" style="width:'+pct(c.failed)+'"></i>'+
+        '<i class="seg-waiting" style="width:'+pct(c.waiting)+'"></i>'+
+      "</div></div></div>"+
+    '<div class="counts">'+
+      countBox("c-pass","成功",c.pass,"var(--pass)")+
+      countBox("c-skip","跳过",c.skip,"#c9a227")+
+      countBox("c-blocked","阻塞",c.blocked,"#d9730d")+
+      countBox("c-failed","失败",c.failed,"var(--failed)")+
+      countBox("c-notrun","未执行",c.notrun,"var(--ink-400)")+
+    "</div>"+
+    '<div class="scope-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><div>本期已实现 <strong>01—06 节 27 步</strong>；完整设计 184 步，其余 <strong>157 步未实现</strong>。本页结论不代表整条实机主流程通过。</div></div>'+
+    (run?'<div class="aux-line"><span><span class="k">runId</span> <span class="v mono">'+esc(run.id)+'</span></span><span><span class="k">策略</span> <span class="v">'+esc(optLabel(run.options))+'</span></span><span><span class="k">清理</span> <span class="v">'+esc(run.cleanup.state==="done"?"完成":run.cleanup.state==="pending"?"待现场处理":"未开始")+"</span></span></div>":"")+
+    "</div></div></section>";
+}
+
+function countBox(cls,label,val,dot){
+  return '<div class="count '+cls+'"><span class="k"><i style="background:'+dot+'"></i>'+label+'</span><span class="v">'+val+"</span></div>";
+}
+
+function checkpointCard(run){
+  const cp=run.checkpoint;
+  const step=stepById(run,cp.stepId);
+  const manualOnly = step && step.hw==="manualOnly";
+  return '<section class="action-card"><div class="action-head">'+
+    '<h3><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg>等待现场操作确认</h3>'+
+    '<span class="step-ref">'+esc(cp.stepId)+'</span>'+
+    '<span class="tag '+(manualOnly?"tag-manual":"tag-hw")+'">'+(manualOnly?"原用例人工点":"人工执行硬件步骤")+'</span>'+
+    '<span class="badge b-waiting" style="margin-left:auto"><span class="spin"></span>等待人工确认</span></div>'+
+    '<div class="action-body">'+
+      '<div class="action-grid">'+
+        '<div class="kv"><span class="k">步骤</span><span class="v">'+esc(step?step.name:"")+'</span></div>'+
+        '<div class="kv"><span class="k">等待起点</span><span class="v mono">'+esc(cp.startedLabel)+'</span></div>'+
+        '<div class="kv"><span class="k">已等待</span><span class="v mono" id="cp-elapsed">—</span></div>'+
+        '<div class="kv"><span class="k">确认点 ID</span><span class="v mono">'+esc(cp.id)+'</span></div>'+
+      "</div>"+
+      '<div class="instructions"><strong style="font-size:12px;display:block;margin-bottom:4px">现场操作说明</strong><ol>'+
+        cp.instructions.map(t=>"<li>"+esc(t)+"</li>").join("")+
+      "</ol></div>"+
+      '<div class="note-wrap"><label for="cp-note" style="font-size:12px;font-weight:600;color:var(--ink-700)">备注'+(cp.error?' <span class="hint-inline err">必填</span>':'')+'</label>'+
+        '<textarea id="cp-note" placeholder="现场操作情况、异常现象或阻塞原因（阻塞/失败时必填）">'+esc(state.note)+"</textarea>"+
+        (cp.error?'<span class="hint-inline err">'+esc(cp.error)+"</span>":'<span class="hint-inline">“完成”仅表示现场已操作；随后仍执行软件断言，不等于整步通过。</span>')+
+      "</div>"+
+      '<div class="btn-row" style="justify-content:flex-end">'+
+        '<button class="btn btn-danger" data-cp="failed">判定失败</button>'+
+        '<button class="btn btn-warn" data-cp="blocked">报告阻塞</button>'+
+        '<button class="btn btn-primary" data-cp="done">完成（现场已操作）</button>'+
+      "</div>"+
+      '<div class="hint-inline">刷新或重连会恢复本确认点，等待计时不因刷新重置；旧页面、超时或已结束的确认点提交将被拒绝。</div>'+
+    "</div></section>";
+}
+
+function pendingCard(run){
+  const step=run.steps.find(s=>s.status==="blocked");
+  const done = !!run.fieldVerified;
+  return '<section class="action-card pending"><div class="action-head">'+
+    '<h3><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>待现场处理</h3>'+
+    '<span class="badge b-lock" style="margin-left:auto"><span class="dot"></span>本机占用未释放</span></div>'+
+    '<div class="action-body">'+
+      '<div class="danger-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg><div>硬件状态未确认：本轮<strong>不自动关闭被测程序</strong>，不因超时或确认失败继续原有清理逻辑。未完成现场处理前禁止新一轮执行；页面不提供“强制解锁并继续”。</div></div>'+
+      '<div class="action-grid">'+
+        '<div class="kv"><span class="k">runId</span><span class="v mono">'+esc(run.id)+'</span></div>'+
+        '<div class="kv"><span class="k">阻塞步骤</span><span class="v">'+esc(step?step.id+" "+step.name:"—")+'</span></div>'+
+        '<div class="kv"><span class="k">原始结论</span><span class="v" style="color:var(--blocked)">阻塞（不因现场处理改为成功）</span></div>'+
+        '<div class="kv"><span class="k">被测进程</span><span class="v mono">WaferAOI.exe · PID 18472（本轮创建，保留中）</span></div>'+
+      "</div>"+
+      '<div><div style="font-size:12px;font-weight:700;color:var(--ink-700);margin-bottom:6px">现场处理规程</div>'+
+        '<div class="instructions"><ol>'+
+          "<li>按现场安全规程处理设备状态，确认无运动/上料风险。</li>"+
+          "<li>确认本轮被测软件已按规程退出，或记录保留原因。</li>"+
+          "<li>确认无其他同名被测进程占用设备。</li>"+
+          "<li>在下方提交“现场处理完成”，由执行器核验后解除占用。</li>"+
+        "</ol></div></div>"+
+      '<div class="verify-list">'+
+        verifyRow("被测进程已退出（PID 18472）", done?"ok":"wait", done?"已核验":"待核验")+
+        verifyRow("无冲突被测进程", done?"ok":"wait", done?"已核验":"待核验")+
+        verifyRow("设备状态已明确确认", done?"ok":"wait", done?"已确认":"待确认")+
+      "</div>"+
+      '<div class="note-wrap"><label for="pf-note" style="font-size:12px;font-weight:600;color:var(--ink-700)">现场处理记录</label>'+
+        '<textarea id="pf-note" placeholder="处理人、处理时间、设备与进程现状">'+esc(run.fieldNote||"")+"</textarea></div>"+
+      '<div class="btn-row" style="justify-content:flex-end">'+
+        '<button class="btn btn-secondary" id="btn-verify">重新核验现场状态</button>'+
+        '<button class="btn btn-primary" id="btn-field-done" '+(done?"":"disabled title=\"执行器核验通过后才可提交\"")+">提交现场处理完成</button>"+
+      "</div>"+
+      '<div class="hint-inline">仅点击确认、原步骤结束或旧执行器退出均不足以解除占用。'+(done?"":" 上方三项由执行器核验，页面不可伪造。")+"</div>"+
+    "</div></section>";
+}
+function verifyRow(t,cls,txt){
+  return '<div class="verify"><span class="vk">'+esc(t)+'</span><span class="vs '+cls+'">'+(cls==="ok"?"✓":"○")+" "+esc(txt)+"</span></div>";
+}
+
+function stepsCard(run){
+  const steps = run ? run.steps : STEP_DEFS.map(d=>({id:d.id,sec:d.sec,name:d.name,status:"notrun",reason:"",durationMs:null,hw:d.hw,delayed:!!d.delayed,logs:[],artifacts:[]}));
+  const groups={};
+  steps.forEach(s=>{(groups[s.sec]=groups[s.sec]||[]).push(s);});
+  let html='<section class="card steps-card"><div class="card-head"><h2>步骤清单</h2>'+
+    '<span class="head-note">'+steps.length+' 步 · 按章节 · 编号沿用原用例</span></div><div class="steps-scroll">';
+  Object.keys(groups).forEach(sec=>{
+    const g=groups[sec];
+    const fin=g.filter(s=>["pass","passManual","skipPartial","skipHardware","skipRequested","blocked","failed","unknown"].includes(s.status)).length;
+    html+='<div class="sec-head"><span class="sec-idx">'+sec+'</span><span class="sec-title">'+SECTIONS[sec]+'</span>'+
+      '<span class="sec-prog">'+fin+" / "+g.length+"</span></div>";
+    g.forEach(s=>{
+      const st=ST[s.status]||ST.notrun;
+      const sel = state.selectedStep===s.id?" selected":"";
+      const reason = s.reason ? '<div class="step-reason">'+esc(s.reason)+"</div>" : "";
+      const tags = (s.hw==="manualOnly"?'<span class="tag tag-manual">原用例人工点</span>':"")+
+                   (s.delayed?'<span class="tag">登录后执行</span>':"");
+      html+='<div class="step-row '+st.row+sel+'" role="button" tabindex="0" data-step="'+s.id+'" aria-label="步骤 '+s.id+" "+esc(s.name)+" 状态 "+st.label+'">'+
+        '<span class="step-id">'+s.id+"</span>"+
+        '<span class="step-main"><span class="step-name">'+esc(s.name)+tags+"</span>"+reason+"</span>"+
+        '<span class="step-st"><span class="badge '+st.cls+'">'+(s.status==="running"?'<span class="spin"></span>':"")+st.label+"</span></span>"+
+        '<span class="step-dur num">'+fmtDur(s.durationMs)+"</span>"+
+      "</div>";
+    });
+  });
+  html+="</div></section>";
+  return html;
+}
+
+function conclusionCard(run){
+  if(!run) return "";
+  const c=countSteps(run);
+  const cc=run.conclusion;
+  if(!cc){
+    return '<section class="card"><div class="card-head"><h2>本轮结论</h2></div><div class="card-body"><div class="banner"><div><span class="bt">尚未形成结论。</span> 步骤执行中；清理结果与步骤结论分别记录。</div></div></div></section>';
+  }
+  const kind = cc.kind==="pass"?"pass":cc.kind==="pending"?"pending":"fail";
+  const icon = cc.kind==="pass"
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>';
+  return '<section class="card"><div class="card-head"><h2>本轮结论</h2>'+
+    '<span class="readonly-tag">报告只读</span></div><div class="card-body">'+
+    '<div class="conclusion '+kind+'"><div class="cicon">'+icon+"</div><div>"+
+      "<h3>"+esc(cc.title)+"</h3><p>"+esc(cc.detail)+"</p>"+
+      '<div class="meta"><span>成功 '+c.pass+"</span><span>跳过 "+c.skip+"</span><span>阻塞 "+c.blocked+"</span><span>失败 "+c.failed+"</span><span>未执行 "+c.notrun+"</span><span>· 每步只计一次</span></div>"+
+    "</div></div>"+
+    '<div class="banner ok" style="margin-top:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><div>'+
+      "清理状态：<strong>"+esc(run.cleanup.text)+"</strong>。步骤结论与清理结果分开保留；步骤全部结束但清理失败时，本轮不会显示全部成功。"+
+    "</div></div>"+
+    '<div class="aux-line" style="margin-top:10px"><span><span class="k">实际配方</span> <span class="v">RCP-'+esc(run.id.slice(-4)).toUpperCase()+"</span></span><span><span class=\"k\">被测进程</span> <span class=\"v mono\">WaferAOI.exe · PID 18472</span></span><span><span class=\"k\">证据目录</span> <span class=\"v mono\">runs/"+esc(run.id)+"</span></span></div>"+
+    '<div class="btn-row" style="margin-top:12px"><button class="btn btn-secondary btn-sm" id="btn-report">查看完整报告</button></div>'+
+    "</div></section>";
+}
+
+/* ============================ 右列详情 ============================ */
+function renderRight(){
+  const right=$("#col-right");
+  if(state.view!=="current"){
+    right.innerHTML=legendCard();
+    return;
+  }
+  const run=state.run;
+  const stepId=state.selectedStep;
+  const step = run && stepId ? run.steps.find(s=>s.id===stepId) : null;
+  if(!step){
+    right.innerHTML='<section class="card"><div class="detail-empty">'+
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>'+
+      '<div><strong style="color:var(--ink-700)">选择左侧步骤查看详情</strong></div>'+
+      "<div>显示该步骤的说明、断言、日志与本轮已登记证据；不从中文日志推断状态。</div>"+
+      "</div></section>"+legendCard();
+    return;
+  }
+  const st=ST[step.status]||ST.notrun;
+  const logs = step.logs.length ? step.logs.map(l=>'<div class="ln"><span class="t">'+esc(l.t)+'</span><span class="lv '+(l.level==="ERR"?"err":l.level==="WARN"?"warn":"")+'">'+esc(l.level)+'</span><span class="msg">'+esc(l.msg)+"</span></div>").join("")
+    : '<div class="empty">该步骤尚无日志；未执行的步骤不会生成事件。</div>';
+  const arts = step.artifacts.length
+    ? '<div class="artifacts">'+step.artifacts.map(a=>'<button class="art'+(a.missing?" missing":"")+'" data-art="'+esc(a.id)+'"><span class="thumb">'+(a.kind==="png"?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-4 4 3 3-2 4 3"/></svg>':a.missing?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3h8l4 4v14H4V3z"/><path d="M9 13h6M9 17h4"/></svg>')+"</span><span class=\"nm\">"+esc(a.name)+'</span><span class="mt">'+esc(a.kind.toUpperCase()+" · "+a.size+(a.missing?" · 缺失":""))+"</span></button>").join("")+"</div>"
+    : '<div class="hint-inline">暂无已登记证据。证据在本轮产物目录生成后才可查看；缺失时显示缺失状态，不据此改写结论。</div>';
+
+  const assertHtml = step.assert.map((a,i)=>{
+    let cls="wait", mark="○";
+    if(["pass","passManual"].includes(step.status)) {cls="pass";mark="✓";}
+    else if(step.status==="failed"){cls="fail";mark="✕";}
+    else if(["skipHardware","skipPartial","skipRequested"].includes(step.status)){cls="wait";mark="–";}
+    else if(step.status==="blocked"){cls="fail";mark="!";}
+    return '<div class="assert '+cls+'"><span class="ai">'+mark+'</span><span>'+esc(a)+"</span></div>";
+  }).join("");
+
+  right.innerHTML='<section class="card"><div class="detail-head">'+
+    '<div class="sid">'+esc(step.id)+' · '+esc(SECTIONS[step.sec])+"</div>"+
+    "<h3>"+esc(step.name)+"</h3>"+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge '+st.cls+'">'+st.label+"</span>"+
+      (step.hw==="manualOnly"?'<span class="tag tag-manual">原用例人工点</span>':step.hw?'<span class="tag tag-hw">含硬件部分</span>':"")+
+      (step.durationMs!=null?'<span class="hint-inline" style="align-self:center">耗时 '+fmtDur(step.durationMs)+"</span>":"")+
+    "</div></div>"+
+    '<div class="detail-sec"><h4>步骤说明</h4><div class="detail-text">'+esc(step.desc)+"</div></div>"+
+    (step.reason?'<div class="detail-sec"><h4>原因</h4><div class="detail-text" style="color:var(--ink-900);font-weight:600">'+esc(step.reason)+"</div></div>":"")+
+    '<div class="detail-sec"><h4>断言与期望</h4>'+assertHtml+"</div>"+
+    '<div class="detail-sec"><h4>日志 <span class="n">'+step.logs.length+" 条</span></h4><div class=\"logs\">"+logs+'</div><div class="logs-foot"><span>只展示结构化事件与本步日志，不解析中文日志推断状态</span><span>events.jsonl</span></div></div>'+
+    '<div class="detail-sec"><h4>本轮证据 <span class="n">'+step.artifacts.length+"</span></h4>"+arts+"</div>"+
+    "</section>"+legendCard();
+}
+
+function legendCard(){
+  return '<section class="card"><div class="card-head"><h2>状态语义图例</h2><span class="head-note">需求 7.1</span></div>'+
+    '<div class="card-body tight"><div class="legend">'+
+      Object.keys(ST).map(k=>'<div class="legend-row"><span class="lb"><span class="badge '+ST[k].cls+'">'+ST[k].label+'</span></span><span>'+ST[k].desc+"</span></div>").join("")+
+    "</div></div></section>";
+}
+
+/* ============================ 历史 ============================ */
+function historyView(){
+  const rows=state.history.map(h=>{
+    const cc=h.conclusion||{kind:"neginfo",title:"中断"};
+    const kind=cc.kind==="pass"?"pass":cc.kind==="pending"?"pending":"fail";
+    const badge = cc.kind==="pass"?'<span class="badge b-pass">通过</span>':cc.kind==="pending"?'<span class="badge b-blocked">待现场处理</span>':'<span class="badge b-failed">未通过</span>';
+    return '<tr class="clickable" data-hist="'+esc(h.id)+'"><td class="rid">'+esc(h.id)+'</td><td class="num">'+esc(h.startedAt)+
+      "</td><td>"+esc(optLabel(h.options))+"</td><td>"+badge+'</td><td><span class="badge '+(h.cleanup.state==="done"?"b-pass":"b-blocked")+'">'+(h.cleanup.state==="done"?"已清理":"待现场处理")+"</span>"+
+      '</td><td class="num"><span style="color:var(--pass)">'+h.counts.pass+'</span> / <span style="color:var(--skip)">'+h.counts.skip+'</span> / <span style="color:var(--blocked)">'+h.counts.blocked+'</span> / <span style="color:var(--failed)">'+h.counts.failed+'</span> / <span style="color:var(--ink-500)">'+h.counts.notrun+"</span></td></tr>";
+  }).join("");
+
+  return '<section class="card"><div class="card-head"><h2>本机历史运行</h2><span class="head-note">'+state.history.length+" 轮 · 只读</span></div>"+
+    '<div class="card-body" style="padding-bottom:8px"><div class="banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><div>历史记录来自本机证据目录，工具重启后仍可查询；修改当前配置不覆盖历史快照，证据缺失不改写原结论。</div></div></div>'+
+    (state.history.length?'<table class="hist-table"><thead><tr><th>runId</th><th>开始时间</th><th>执行策略</th><th>结论</th><th>清理</th><th>成功/跳过/阻塞/失败/未执行</th></tr></thead><tbody>'+rows+"</tbody></table>":'<div class="hist-empty">暂无历史运行。完成至少一轮后在此查询。</div>')+
+    "</section>";
+}
+
+function historyDetailView(){
+  const h=state.history.find(x=>x.id===state.historyRunId);
+  if(!h) return '<div class="hist-empty">记录不存在</div>';
+  const cc=h.conclusion||{kind:"fail",title:"中断",detail:"缺少终结记录"};
+  const kind=cc.kind==="pass"?"pass":cc.kind==="pending"?"pending":"fail";
+  const fakeRun={id:h.id,options:h.options,phase:"done",steps:[],prep:[],cleanup:h.cleanup,conclusion:cc,checkpoint:null,events:[],seq:0,startedLabel:h.startedAt,finished:true};
+  /* 历史步骤用示意快照（正式实现读取 report.json） */
+  const steps=STEP_DEFS.map((d,i)=>{
+    let status="pass";
+    if(h.id.includes("27ab")){
+      if(d.id==="06.04") status="blocked";
+      else if(["06.01","06.02","06.03","06.05"].includes(d.id)) status="notrun";
+    }else if(h.id.includes("11c7")){
+      if(d.id==="01.02") status="skipRequested";
+      else if(["01.01","02.02","03.01","03.02","04.01","06.01","06.03","06.04"].includes(d.id)) status="passManual";
+    }
+    return {...d,status,reason:status==="skipRequested"?"本轮选择跳过版本断言（版本号及编译日期）":status==="blocked"?"硬件状态无法确认：平台有片状态不可读":status==="passManual"?"现场已操作并确认；软件断言通过":status==="skipPartial"?"软件断言通过；硬件部分未执行":"",
+      startedAt:null,durationMs:1200+i*37,logs:[],artifacts:[]};
+  });
+
+  return '<div class="banner info" style="margin-bottom:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg><div><span class="bt">历史记录 · 只读</span> runId <span class="mono">'+esc(h.id)+'</span>；不重新执行步骤、不展示可操作的旧确认按钮。</div></div>'+
+    '<section class="card"><div class="card-head"><h2>'+esc(cc.title)+"</h2><span class=\"readonly-tag\">只读</span></div><div class=\"card-body\">"+
+      '<div class="conclusion '+kind+'"><div class="cicon">'+(kind==="pass"?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>')+'</div><div><h3>'+esc(cc.title)+'</h3><p>'+esc(cc.detail)+
+      '</p><div class="meta"><span>开始 '+esc(h.startedAt)+"</span><span>策略 "+esc(optLabel(h.options))+'</span><span>清理 '+esc(h.cleanup.text)+"</span></div></div></div>"+
+      '<div class="counts" style="margin-top:14px">'+countBox("c-pass","成功",h.counts.pass,"var(--pass)")+countBox("c-skip","跳过",h.counts.skip,"#c9a227")+countBox("c-blocked","阻塞",h.counts.blocked,"#d9730d")+countBox("c-failed","失败",h.counts.failed,"var(--failed)")+countBox("c-notrun","未执行",h.counts.notrun,"var(--ink-400)")+"</div>"+
+      '<div class="aux-line" style="margin-top:12px"><span><span class="k">配置快照</span> <span class="v mono">V3.2.1.7 · 2026-10-12</span></span><span><span class="k">证据目录</span> <span class="v mono">'+esc(h.artifacts)+'</span></span></div>'+
+      '<div class="btn-row" style="margin-top:12px"><button class="btn btn-secondary btn-sm" id="btn-back-hist">返回历史列表</button><button class="btn btn-ghost btn-sm" id="btn-open-report">查看完整报告</button></div>'+
+    "</div></section>"+
+    stepsCard({steps:steps,id:h.id})+
+    '<div class="banner warn" style="margin-top:12px"><div>若证据文件已被现场移走或删除，此处显示缺失状态，但不改写原运行结论。</div></div>';
+}
+
+/* ============================ 交互绑定 ============================ */
+function bindMain(){
+  document.querySelectorAll("[data-step]").forEach(el=>{
+    el.onclick=()=>{ state.selectedStep=el.getAttribute("data-step"); renderRight(); 
+      document.querySelectorAll(".step-row").forEach(r=>r.classList.toggle("selected",r.getAttribute("data-step")===state.selectedStep));
+      persist();
+      const row=document.querySelector('.step-row[data-step="'+state.selectedStep+'"]');
+      if(row) row.classList.add("selected");
+    };
+    el.onkeydown=(ev)=>{ if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();el.click();} };
+  });
+  document.querySelectorAll("[data-cp]").forEach(btn=>{
+    btn.onclick=()=>submitCheckpoint(btn.getAttribute("data-cp"));
+  });
+  const note=$("#cp-note");
+  if(note){
+    note.oninput=()=>{state.note=note.value; if(state.run&&state.run.checkpoint){state.run.checkpoint.error="";} persist();};
+  }
+  const pf=$("#pf-note");
+  if(pf){ pf.oninput=()=>{ if(state.run){state.run.fieldNote=pf.value;} }; }
+  const vbtn=$("#btn-verify");
+  if(vbtn){ vbtn.onclick=async()=>{
+      if(!state.run) return;
+      toast("正在核验本轮进程与设备状态…");
+      await sleep(700);
+      state.run.fieldVerified=true;
+      renderAll();
+      toast("核验通过：进程已退出、无冲突进程、设备状态已确认");
+  };}
+  const fdone=$("#btn-field-done");
+  if(fdone){ fdone.onclick=()=>{
+      if(!state.run||!state.run.fieldVerified) return;
+      pushEvent(state.run,"field.resolved",{});
+      state.run.phase="done";state.run.finished=true;
+      state.run.cleanup={state:"done",text:"现场处理完成，占用已解除：本轮进程已退出、无冲突进程"};
+      if(state.run.conclusion){
+        state.run.conclusion.title="现场处理完成（原结论保持阻塞）";
+        state.run.conclusion.detail+=" 现场处理已于 "+nowHM()+" 完成并经执行器核验，占用已解除；原阻塞结论不改为成功。";
+      }
+      pushEvent(state.run,"lock.released",{});
+      archiveRun(state.run);
+      renderAll();
+      toast("现场处理已完成，机器占用已解除；原失败/阻塞结论保持不变");
+  };}
+  const rep=$("#btn-report"); if(rep){rep.onclick=()=>openReport();}
+  const back=$("#btn-back-hist"); if(back){back.onclick=()=>{state.view="history";renderAll();};}
+  const rep2=$("#btn-open-report"); if(rep2){rep2.onclick=()=>openReport();}
+  document.querySelectorAll("[data-hist]").forEach(tr=>{
+    tr.onclick=()=>{state.view="historyDetail";state.historyRunId=tr.getAttribute("data-hist");renderAll();};
+  });
+}
+
+/* 配置输入 */
+["#cfg-exe","#cfg-recipe","#cfg-evidence","#cfg-version","#cfg-date"].forEach(sel=>{
+  document.addEventListener("input",(e)=>{
+    if(e.target.matches(sel)){
+      const key={ "#cfg-exe":"exe","#cfg-recipe":"recipe","#cfg-evidence":"evidence","#cfg-version":"version","#cfg-date":"buildDate"}[sel];
+      state.config[key]=e.target.value;
+      persist();
+      renderAll();
+    }
+  });
+});
+
+/* 配置校验：纯函数，返回 {fieldId: msg} */
+function computeErrors(){
+  const e={};
+  const c=state.config;
+  if(!c.exe.trim()) e["f-exe"]="必须指定被测程序路径。";
+  else if(!/\.exe$/i.test(c.exe.trim())) e["f-exe"]="路径应以 .exe 结尾。";
+  if(!c.evidence.trim()) e["f-evidence"]="证据目录不能为空。";
+  if(!state.options.skipVersion){
+    if(!c.version.trim()) e["f-version"]="未勾选“跳过版本断言”时，预期版本号必填。";
+    if(!c.buildDate.trim()) e["f-date"]="未勾选“跳过版本断言”时，预期编译日期必填。";
+  }
+  return e;
+}
+function validateConfig(show){
+  const e=computeErrors();
+  if(show) state.errors=e;
+  const keys=Object.keys(e);
+  return keys.length ? e[keys[0]] : "";
+}
+
+/* 选项交互：硬件互斥、可全部取消 */
+$("#cb-version").addEventListener("change",(e)=>{
+  state.options.skipVersion=e.target.checked;
+  renderAll();
+  if(!state.options.skipVersion) toast("已恢复版本号与编译日期的严格核验");
+});
+$("#cb-hwskip").addEventListener("change",(e)=>{
+  state.options.hw = e.target.checked ? "skip" : (state.options.hw==="skip"?"strict":state.options.hw);
+  renderAll();
+});
+$("#cb-hwmanual").addEventListener("change",(e)=>{
+  state.options.hw = e.target.checked ? "manual" : (state.options.hw==="manual"?"strict":state.options.hw);
+  renderAll();
+});
+
+/* 保存 / 检查 */
+$("#btn-save").onclick=async()=>{
+  const err=validateConfig(true);
+  if(err){ renderConfig(); toast(err,true); return; }
+  $("#save-state").textContent="保存中…";
+  await sleep(420);
+  $("#save-state").textContent="已保存 · "+nowHM();
+  toast("配置已保存到本机；刷新或重启工具后仍可读取");
+  persist();
+};
+$("#btn-recheck").onclick=async()=>{
+  const err=validateConfig(true);
+  renderConfig();
+  toast(err? err : "检查通过：路径、目录与权限满足启动条件", !!err);
+};
+
+/* 开始执行 */
+$("#btn-start").onclick=async()=>{
+  if(state.run && !state.run.finished && state.run.phase!=="done"){ toast("本轮仍在进行，同一时刻只允许一轮",true); return; }
+  if(state.run && state.run.phase==="pending"){ toast("待现场处理：完成现场处理并核验前禁止新一轮",true); return; }
+  const err=validateConfig(true);
+  if(err){ renderConfig(); toast(err,true); return; }
+  state.note="";
+  state.selectedStep=null;
+  const run=createRun({skipVersion:state.options.skipVersion, hw:state.options.hw});
+  run.scenario=$("#demo-scenario").value;
+  state.run=run;
+  state.connection="online";
+  pushEvent(run,"run.created",{options:run.options});
+  renderAll();
+  toast("已创建本轮 "+run.id+"，选项已冻结");
+  startTicker();
+  await runScenario(run);
+};
+
+/* 断线模拟 */
+$("#btn-disconnect").onclick=async()=>{
+  if(!state.run || state.run.finished){ toast("当前没有进行中的运行可模拟断线",true); return; }
+  state.connection="lost"; renderAll();
+  await sleep(1600);
+  state.connection="recovering"; renderAll();
+  await sleep(1400);
+  state.connection="online"; renderAll();
+  toast("重连完成：快照已恢复，按 runId 与 sequence 补齐事件，未重复执行步骤");
+};
+$("#btn-reset").onclick=()=>{
+  cpResolver=null;
+  state.run=null; state.selectedStep=null; state.note=""; state.errors={}; state.connection="online";
+  state.history=seedHistory();
+  try{localStorage.removeItem(LS_KEY);}catch(e){}
+  renderAll();
+  toast("已清除本机快照，恢复初始（空）状态");
+};
+$("#btn-history").onclick=()=>{
+  if(state.view==="current"){ state.view="history"; }
+  else { state.view="current"; }
+  renderAll();
+};
+$("#demo-scenario").onchange=(e)=>{ state.demoScenario=e.target.value; };
+
+/* 计时器 */
+function startTicker(){
+  if(state.ticker) clearInterval(state.ticker);
+  state.ticker=setInterval(()=>{
+    const run=state.run; if(!run) return;
+    const el=document.querySelector("#cp-elapsed");
+    if(el&&run.checkpoint){ el.textContent=fmtDur(Date.now()-run.checkpoint.startedAt); }
+    const cur=run.steps.find(s=>s.status==="running");
+    if(cur&&cur.startedAt){
+      const cell=document.querySelector('.step-row[data-step="'+cur.id+'"] .step-dur');
+      if(cell) cell.textContent=fmtDur(Date.now()-cur.startedAt);
+    }
+  },400);
+}
+
+/* 报告与证据弹层 */
+function openReport(){
+  const run=state.run;
+  if(!run) return;
+  const c=countSteps(run);
+  const report={
+    protocolVersion:"1.0", runId:run.id, startedAt:run.startedLabel,
+    options:run.options, phase:run.phase,
+    counts:c, cleanup:run.cleanup.state,
+    scope:{implemented:27, designed:184, notImplemented:157},
+    evidence:"runs/"+run.id,
+    steps:run.steps.map(s=>({stepId:s.id,status:s.status,reason:s.reason,durationMs:s.durationMs}))
+  };
+  $("#modal-title").textContent="本轮最终报告（report.json）";
+  $("#modal-body").innerHTML='<div class="hint-inline">报告只读；步骤结论、选项、原因、清理状态与证据索引分别保留。</div>'+
+    '<div class="hint-inline">文件：<span class="mono">runs/'+esc(run.id)+'/report.json</span></div>'+
+    '<pre class="code">'+esc(JSON.stringify(report,null,2))+"</pre>";
+  $("#overlay").hidden=false;
+}
+
+function openArtifact(id){
+  const run=state.run;
+  let art=null, stepId=null;
+  if(run) run.steps.forEach(s=>s.artifacts.forEach(a=>{if(a.id===id){art=a;stepId=s.id;}}));
+  $("#modal-title").textContent = art?art.name:"证据";
+  let body='<div class="hint-inline">步骤 '+esc(stepId||"—")+' · 通过本轮产物接口访问，不接受任意本地路径。</div>';
+  if(!art){ body+='<div class="preview-box"><strong>证据缺失</strong><span>文件已被移动或删除；不据此改写原运行结论。</span></div>'; }
+  else if(art.missing){ body+='<div class="preview-box"><strong>证据缺失</strong><span>'+esc(art.name)+' 未找到</span></div>'; }
+  else if(art.kind==="png"){
+    body+='<div class="preview-box"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-4 4 3 3-2 4 3"/></svg><strong>'+esc(art.name)+'</strong><span>截图预览（原型占位，正式实现由产物接口返回图像）</span></div>';
+  }else if(art.kind==="json"){
+    body+='<pre class="code">'+esc('{\n  "protocolVersion": "1.0",\n  "stepId": "'+(stepId||"")+'",\n  "node": "MainWindow/Panel[...]",\n  "automationId": "btnSaveRecipe",\n  "rect": { "x": 812, "y": 466, "w": 96, "h": 32 },\n  "patterns": ["Invoke","Value"]\n}')+"</pre>";
+  }else{
+    body+='<div class="preview-box"><strong>'+esc(art.name)+'</strong><span>纯文本证据，可在产物面板中查看（原型不渲染）</span></div>';
+  }
+  $("#modal-body").innerHTML=body;
+  $("#overlay").hidden=false;
+}
+$("#modal-close").onclick=()=>{$("#overlay").hidden=true;};
+$("#overlay").onclick=(e)=>{if(e.target===$("#overlay")) $("#overlay").hidden=true;};
+document.addEventListener("keydown",(e)=>{if(e.key==="Escape") $("#overlay").hidden=true;});
+/* 证据卡为右栏动态内容，使用事件委托，避免每次重绘都重新绑定 */
+document.addEventListener("click",(e)=>{
+  const art=e.target.closest && e.target.closest("[data-art]");
+  if(art){ openArtifact(art.getAttribute("data-art")); }
+});
+
+/* Toast */
+let toastTimer=null;
+function toast(msg, isErr){
+  const t=$("#toast");
+  t.textContent=msg; t.className="toast show"+(isErr?" err":"");
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.className="toast"+(isErr?" err":"");},3600);
+}
+
+/* ============================ 启动 ============================ */
+function boot(){
+  state.history=seedHistory();
+  const restored=restore();
+  if(restored && state.run){
+    /* 刷新恢复：显示快照并补齐（原型内直接续跑未收敛步骤） */
+    const run=state.run;
+    run.token=Date.now();
+    state.connection="recovering";
+    renderAll();
+    setTimeout(async()=>{
+      state.connection="online";
+      const pending = run.phase!=="done" && run.phase!=="pending";
+      renderAll();
+      toast("已从本机记录恢复本轮 "+run.id+"（快照 + 事件补齐）");
+      if(pending){
+        startTicker();
+        if(run.checkpoint){
+          /* 恢复等待中的确认点，计时不重置 */
+          const cpStep=stepById(run,run.checkpoint.stepId);
+          cpResolver=null;
+          const cpResult=await new Promise(res=>{cpResolver=res;});
+          if(!cpStep) return;
+          if(cpResult.result==="blocked"){
+            run.phase="execute";
+            setStep(run,cpStep,"blocked","现场确认阻塞："+(cpResult.note||"未填写原因"));
+            run.conclusion={kind:"fail", title:"本轮未通过：现场确认阻塞",
+              detail:"步骤 "+cpStep.id+" 由现场确认阻塞，已停止本轮调度并进入清理。"};
+            await finishRun(run,"failed"); return;
+          }
+          if(cpResult.result==="failed"){
+            run.phase="execute";
+            setStep(run,cpStep,"failed","现场确认失败："+(cpResult.note||"未填写原因"));
+            run.conclusion={kind:"fail", title:"本轮未通过：现场确认失败",
+              detail:"步骤 "+cpStep.id+" 现场判定失败，已停止本轮调度并进入清理。"};
+            await finishRun(run,"failed"); return;
+          }
+          cpStep.artifacts=makeEvidence(run,cpStep);
+          setStep(run,cpStep,"passManual","现场已操作并确认；软件断言通过（非全自动）");
+          run.phase="execute";
+        }
+        await runScenario(run);
+      }
+    },1600);
+  }else{
+    renderAll();
+  }
+  startTicker();
+}
+boot();
+
+})();
+</script>
+</body>
+</html>

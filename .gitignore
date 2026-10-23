@@ -1,0 +1,27 @@
+# 构建产物与运行数据不进入版本库
+bin/
+obj/
+publish/
+.vs/
+*.user
+*.suo
+TestResults/
+UiTestArtifacts/
+
+# 前端依赖与构建产物
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 本机运行数据与证据
+data/
+runs/
+artifacts/
+*.log
+*.jsonl.tmp
+
+# 临时文件
+*.tmp
+*.bak
+Thumbs.db
+desktop.ini

@@ -1,0 +1,859 @@
+openapi: 3.0.3
+info:
+  title: 主流程自动化回归本机执行工具 API
+  version: 1.0.0
+  description: |
+    JCRJZDH-6 本期（01—06 节 27 步）后端契约。宿主只监听 127.0.0.1 / ::1，不提供账号体系与局域网访问；
+    密码只由测试机环境变量 `WAFER_AOI_UI_PASSWORD` 提供，任何接口都不返回密码值。
+
+    **状态口径**：步骤状态与需求 7.1 一一对应；`passed` 包含自动通过，`operatorConfirmed` 表示人工确认通过；
+    `passedWithHardwareSkipped`、`hardwareSkipped`、`userSkipped` 都计入 `counts.skipped`；
+    `waiting` 与 `unknown` 单独计数，不并入 `notRun`。分母固定为本期 27 步。
+
+    **事件**：`GET /api/runs/{runId}/events` 为 SSE。先补发 `after`（或 `Last-Event-ID`）之后的历史事件，再推送增量；
+    SSE 的 `event:` 名与 `data.type` 使用同一套 camelCase 名称；心跳为注释行 `: ping`。事件序号在同一 runId 内严格递增。
+
+    **同源**：浏览器发起的 POST/PUT/PATCH/DELETE 必须携带与本服务同源的 `Origin`；无 Origin 的本机命令行请求放行。
+servers:
+  - url: http://127.0.0.1:5180
+    description: 默认本机回环地址
+
+tags:
+  - name: 基础
+  - name: 配置
+  - name: 运行
+  - name: 事件
+  - name: 确认与现场处理
+  - name: 证据
+  - name: 历史与报告
+
+paths:
+  /api/health:
+    get:
+      tags: [基础]
+      summary: 健康检查
+      responses:
+        '200':
+          description: 宿主可用
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  protocolVersion: { type: integer, example: 1 }
+                  at: { type: string, format: date-time }
+
+  /api/catalog/steps:
+    get:
+      tags: [基础]
+      summary: 本期 27 步静态清单（编号、标题、章节、人工/硬件/版本标记）
+      responses:
+        '200':
+          description: 步骤清单
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  implemented: { type: integer, example: 27 }
+                  designed: { type: integer, example: 184 }
+                  unimplemented: { type: integer, example: 157 }
+                  steps:
+                    type: array
+                    items: { $ref: '#/components/schemas/StepDefinition' }
+
+  /api/config:
+    get:
+      tags: [配置]
+      summary: 读取本机配置
+      responses:
+        '200':
+          description: 配置视图；密码只返回是否已配置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigView' }
+    put:
+      tags: [配置]
+      summary: 合并保存本机配置
+      description: 只更新请求中非 null 的字段；保存后刷新页面或重启宿主仍可读取。密码不可通过本接口写入。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveConfigRequest' }
+      responses:
+        '200':
+          description: 保存后的配置视图
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigView' }
+        '400':
+          description: 选项非法
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/config/validate:
+    post:
+      tags: [配置]
+      summary: 按本轮选项口径检查配置
+      description: |
+        未勾选跳过版本断言时，`expectedVersion` 与 `buildDate` 必填；勾选后不作为启动必填条件。
+        检查项只作为运行准备记录，不虚构为用例步骤通过。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                skipVersionAssertion: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 校验结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigValidationResult' }
+
+  /api/runs/current:
+    get:
+      tags: [运行]
+      summary: 当前（或最近一轮）运行快照
+      description: 没有运行记录时返回 `null` 而不是 404。
+      responses:
+        '200':
+          description: 运行快照或 null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/RunSnapshot' }
+                  - { type: 'null' }
+
+  /api/runs:
+    get:
+      tags: [历史与报告]
+      summary: 本机历史运行列表
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: 历史列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RunSummary' }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      tags: [运行]
+      summary: 创建并启动本轮运行
+      description: |
+        - 同一 `requestId` 重复提交返回同一运行（HTTP 200，`created=false`），不会启动第二个执行器。
+        - 测试机忙或待现场处理时返回 409 `machine_busy`，`currentRun` 为现有运行。
+        - 两个硬件选项同时为真返回 400 `invalid_options`，不创建运行、不启动进程。
+        - 配置校验未通过返回 400 `config_invalid` 与字段级 `issues`。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRunRequest' }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateRunResponse' }
+        '200':
+          description: 幂等重放，返回已有运行
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateRunResponse' }
+        '400':
+          description: 请求或配置错误
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '409':
+          description: 测试机忙
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}:
+    get:
+      tags: [运行]
+      summary: 按 runId 取得快照（当前或历史）
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: 运行快照
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunSnapshot' }
+        '404':
+          description: 运行不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/steps:
+    get:
+      tags: [运行]
+      summary: 本轮 27 步状态、计数与范围
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: 步骤清单
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runId: { type: string }
+                  range: { $ref: '#/components/schemas/RangeInfo' }
+                  counts: { $ref: '#/components/schemas/StepCounts' }
+                  steps:
+                    type: array
+                    items: { $ref: '#/components/schemas/StepState' }
+        '404':
+          description: 运行不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/events:
+    get:
+      tags: [事件]
+      summary: SSE 状态通道（先补流后增量）
+      description: |
+        浏览器使用 `EventSource` 时无法自定义 Header，用 `after` 查询参数传最后序号；
+        原生客户端也可用 `Last-Event-ID`。服务端每 15 秒发送 `: ping` 注释。本轮结束后通道保持打开，
+        以支持待现场处理的后续事件；客户端可自行关闭。
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - in: query
+          name: after
+          description: 只补发 sequence 大于该值的事件；0 表示从头补发。
+          schema: { type: integer, format: int64, minimum: 0 }
+        - in: header
+          name: Last-Event-ID
+          description: 与 after 等价；同时存在时取较大语义（after 优先）。
+          schema: { type: string }
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                id: 12
+                event: stepFinished
+                data: {"protocolVersion":1,"runId":"run_20261023...","sequence":12,"at":"2026-10-23T17:00:00+08:00","type":"stepFinished","stepId":"01.01","status":"passed"}
+        '404':
+          description: 运行不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/checkpoints/{checkpointId}/confirm:
+    post:
+      tags: [确认与现场处理]
+      summary: 提交网页现场确认
+      description: |
+        只接受当前仍在等待的确认点。校验顺序：运行存在 → requestId 幂等 → 运行未结束 → 确认点是当前等待点且未过期 → 原因校验 → 写入命令。
+        重复的同一 `requestId` 返回 HTTP 202 且 `replayed=true`，不重复生效。
+        过期返回 409 `checkpoint_expired`；非当前/已处理返回 409 `checkpoint_not_current`；
+        运行已结束返回 409 `run_not_waiting`；阻塞/失败缺原因返回 400 `reason_required`。
+        接口返回 202 表示命令已送达执行器，最终结果以 `checkpointResolved` 与 `stepFinished` 事件为准。
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - in: path
+          name: checkpointId
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmCheckpointRequest' }
+      responses:
+        '202':
+          description: 已受理，等待执行器回执
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfirmCheckpointResponse' }
+        '400':
+          description: 请求非法或缺原因
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '404':
+          description: 运行不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '409':
+          description: 确认点已过期、非当前或运行已结束
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/field-resolution:
+    post:
+      tags: [确认与现场处理]
+      summary: 提交现场处理完成并请求解除机器占用
+      description: |
+        后端核验：本轮原被测程序 PID 已退出（PID 复用视为已退出）、无同名冲突被测进程、现场明确确认设备状态；
+        不满足时返回 409 `field_verification_failed`，机器占用保持。模拟运行不启动被测程序，进程核验标记为不适用，
+        仅用于契约验证，不能当作实机处理证据。
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FieldResolutionRequest' }
+      responses:
+        '200':
+          description: 核验通过，占用已解除
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FieldResolutionResponse' }
+        '400':
+          description: 未同时确认进程退出与设备状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '404':
+          description: 运行不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '409':
+          description: 不在待现场处理状态或核验未通过
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/artifacts:
+    get:
+      tags: [证据]
+      summary: 本轮已登记证据列表
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: 证据列表；缺失文件 `available=false`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ArtifactInfo' }
+        '404':
+          description: 运行不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/artifacts/{artifactId}:
+    get:
+      tags: [证据]
+      summary: 读取一个已登记证据
+      description: 只按本轮登记过的 artifactId 返回文件，不接受路径参数；文件缺失返回 404 `artifact_missing`。
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - in: path
+          name: artifactId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 文件内容
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            text/plain:
+              schema: { type: string }
+            application/json:
+              schema: { type: object }
+        '404':
+          description: 未登记或文件缺失
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/runs/{runId}/report:
+    get:
+      tags: [历史与报告]
+      summary: 本轮最终报告
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: 报告
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunReport' }
+        '404':
+          description: 报告不存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+components:
+  parameters:
+    RunId:
+      in: path
+      name: runId
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,64}$' }
+
+  schemas:
+    RunOptions:
+      type: object
+      required: [skipVersionAssertion, hardwarePolicy]
+      properties:
+        skipVersionAssertion:
+          type: boolean
+          description: 是否跳过版本号与编译日期断言；跳过时 01.02 仍在清单中并记为跳过。
+        hardwarePolicy:
+          type: string
+          enum: [strict, skip, manual]
+          description: strict=两项都不选、严格按步骤；skip=跳过硬件步骤；manual=人工执行硬件步骤。
+
+    StepDefinition:
+      type: object
+      properties:
+        stepId: { type: string, example: '04.01' }
+        title: { type: string }
+        section: { type: string, example: '04' }
+        sectionTitle: { type: string }
+        hardwareRelated: { type: boolean }
+        versionAssertion: { type: boolean }
+        manualRequirement:
+          type: string
+          enum: [none, always, hardwarePolicyOnly]
+          description: always=原用例明确要求现场物理操作；hardwarePolicyOnly=仅在人工硬件策略下等待确认。
+        manualInstruction: { type: string }
+        observation: { type: string, description: 严格执行时用于观察完成状态的依据 }
+
+    StepState:
+      type: object
+      properties:
+        stepId: { type: string }
+        title: { type: string }
+        section: { type: string }
+        sectionTitle: { type: string }
+        status: { $ref: '#/components/schemas/StepStatus' }
+        reason:
+          type: string
+          description: 跳过、阻塞、失败、等待或人工确认原因；失败时保留原始原因。
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        durationMs: { type: integer, format: int64, nullable: true }
+        manual: { type: boolean, description: 是否包含人工确认 }
+        manualRequirement: { type: string, enum: [none, always, hardwarePolicyOnly] }
+        hardwareRelated: { type: boolean }
+        hardwareSkipped: { type: boolean }
+        versionAssertion: { type: boolean }
+        evidenceIds:
+          type: array
+          items: { type: string }
+        notes:
+          type: array
+          items: { type: string }
+
+    StepStatus:
+      type: string
+      enum:
+        - notRun
+        - running
+        - waiting
+        - passed
+        - operatorConfirmed
+        - passedWithHardwareSkipped
+        - hardwareSkipped
+        - userSkipped
+        - blocked
+        - failed
+        - unknown
+      description: unknown 仅用于执行器异常终止后的当前步骤；结果未知，不推断为失败。
+
+    StepCounts:
+      type: object
+      properties:
+        passed: { type: integer, description: 成功，含 operatorConfirmed }
+        manualPassed: { type: integer, description: 其中的人工确认成功数，是 passed 的子集 }
+        skipped: { type: integer }
+        blocked: { type: integer }
+        failed: { type: integer }
+        notRun: { type: integer }
+        waiting: { type: integer, description: 不计入四类结果 }
+        unknown: { type: integer, description: 不计入四类结果 }
+        total: { type: integer, example: 27 }
+
+    CleanupState:
+      type: object
+      properties:
+        status: { type: string, enum: [notStarted, notRequired, running, succeeded, failed] }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        reason: { type: string }
+
+    PendingFieldState:
+      type: object
+      properties:
+        active: { type: boolean }
+        since: { type: string, format: date-time, nullable: true }
+        reason: { type: string }
+        processId: { type: integer }
+        processStartedAt: { type: string, format: date-time, nullable: true }
+        note: { type: string }
+        processExitedVerified: { type: boolean }
+        deviceStateVerified: { type: boolean }
+        requiredAction: { type: string }
+
+    ExecutorState:
+      type: object
+      properties:
+        processId: { type: integer }
+        alive: { type: boolean }
+        startedAt: { type: string, format: date-time, nullable: true }
+        lastEventAt: { type: string, format: date-time, nullable: true }
+        lastSequence: { type: integer, format: int64 }
+        exitCode: { type: integer, nullable: true }
+
+    CheckpointState:
+      type: object
+      properties:
+        checkpointId: { type: string }
+        stepId: { type: string }
+        instruction: { type: string }
+        createdAt: { type: string, format: date-time, description: 等待起点；刷新不重新计时 }
+        expiresAt: { type: string, format: date-time }
+        status: { type: string, enum: [waiting, resolved, expired] }
+        result: { type: string, enum: [done, blocked, failed], nullable: true }
+        note: { type: string }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        requestId: { type: string }
+
+    ArtifactInfo:
+      type: object
+      properties:
+        artifactId: { type: string }
+        fileName: { type: string }
+        kind: { type: string, example: log }
+        mimeType: { type: string }
+        size: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        stepId: { type: string, description: 为空表示本轮级证据 }
+        available: { type: boolean }
+
+    RangeInfo:
+      type: object
+      properties:
+        implemented: { type: integer, example: 27 }
+        designed: { type: integer, example: 184 }
+        unimplemented: { type: integer, example: 157 }
+
+    RunSnapshot:
+      type: object
+      properties:
+        runId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        phase: { $ref: '#/components/schemas/RunPhase' }
+        conclusion: { $ref: '#/components/schemas/RunConclusion' }
+        options: { $ref: '#/components/schemas/RunOptions' }
+        config: { $ref: '#/components/schemas/RunConfigSnapshot' }
+        range: { $ref: '#/components/schemas/RangeInfo' }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/StepState' }
+        counts: { $ref: '#/components/schemas/StepCounts' }
+        cleanup: { $ref: '#/components/schemas/CleanupState' }
+        pendingField: { $ref: '#/components/schemas/PendingFieldState' }
+        executor: { $ref: '#/components/schemas/ExecutorState' }
+        checkpoint:
+          allOf:
+            - { $ref: '#/components/schemas/CheckpointState' }
+          nullable: true
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ArtifactInfo' }
+        lastSequence: { type: integer, format: int64 }
+        simulated: { type: boolean, description: 模拟运行不得显示为实机通过 }
+        lastMessage: { type: string }
+
+    RunPhase:
+      type: string
+      enum: [created, preparing, executing, waitingHuman, cleaning, pendingField, finished]
+
+    RunConclusion:
+      type: string
+      enum: [pending, passed, passedWithSkips, blocked, failed, interrupted, pendingField]
+
+    RunConfigSnapshot:
+      type: object
+      properties:
+        exePath: { type: string }
+        recipeDir: { type: string }
+        evidenceDir: { type: string }
+        expectedVersion: { type: string }
+        buildDate: { type: string, example: '2026-10-01 09:30' }
+        templateRecipeName: { type: string }
+        userName: { type: string }
+        configurationRoot: { type: string }
+        passwordEnvironmentVariable: { type: string }
+        passwordConfigured: { type: boolean }
+
+    RunSummary:
+      type: object
+      properties:
+        runId: { type: string }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        phase: { $ref: '#/components/schemas/RunPhase' }
+        conclusion: { $ref: '#/components/schemas/RunConclusion' }
+        hardwarePolicy: { type: string, enum: [strict, skip, manual] }
+        skipVersionAssertion: { type: boolean }
+        cleanupStatus: { type: string, enum: [notStarted, notRequired, running, succeeded, failed] }
+        pendingFieldActive: { type: boolean }
+        simulated: { type: boolean }
+        counts: { $ref: '#/components/schemas/StepCounts' }
+
+    CreateRunRequest:
+      type: object
+      required: [requestId]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{1,64}$'
+          description: 客户端幂等标识；重复提交返回同一 runId。
+        options:
+          allOf:
+            - { $ref: '#/components/schemas/RunOptions' }
+          description: 为空时使用本机配置中的默认选项。
+        note: { type: string }
+        skipHardwareSteps:
+          type: boolean
+          description: 兼容字段；与 manualHardwareSteps 同时为 true 时 400 invalid_options。
+        manualHardwareSteps:
+          type: boolean
+          description: 兼容字段；与 skipHardwareSteps 同时为 true 时 400 invalid_options。
+
+    CreateRunResponse:
+      type: object
+      properties:
+        created: { type: boolean, description: false 表示幂等重放 }
+        run: { $ref: '#/components/schemas/RunSnapshot' }
+
+    ConfirmCheckpointRequest:
+      type: object
+      required: [requestId, result]
+      properties:
+        requestId: { type: string, pattern: '^[A-Za-z0-9_-]{1,64}$' }
+        result: { type: string, enum: [done, blocked, failed] }
+        reason: { type: string, description: blocked/failed 必填 }
+        note: { type: string, description: done 时的现场备注 }
+
+    ConfirmCheckpointResponse:
+      type: object
+      properties:
+        accepted: { type: boolean }
+        replayed: { type: boolean }
+        applied: { type: boolean, description: 当前实现会在执行器回执前返回 false }
+        checkpointId: { type: string }
+        stepId: { type: string }
+        status: { type: string, enum: [waiting, resolved, expired] }
+        message: { type: string }
+
+    FieldResolutionRequest:
+      type: object
+      required: [requestId, processExitedConfirmed, deviceStateConfirmed]
+      properties:
+        requestId: { type: string, pattern: '^[A-Za-z0-9_-]{1,64}$' }
+        processExitedConfirmed: { type: boolean }
+        deviceStateConfirmed: { type: boolean }
+        note: { type: string }
+
+    FieldVerification:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        passed: { type: boolean }
+        detail: { type: string }
+
+    FieldResolutionResponse:
+      type: object
+      properties:
+        released: { type: boolean }
+        message: { type: string }
+        verifications:
+          type: array
+          items: { $ref: '#/components/schemas/FieldVerification' }
+
+    ConfigView:
+      type: object
+      properties:
+        exePath: { type: string }
+        recipeDir: { type: string }
+        evidenceDir: { type: string }
+        expectedVersion: { type: string }
+        buildDate: { type: string }
+        templateRecipeName: { type: string }
+        userName: { type: string }
+        configurationRoot: { type: string }
+        options: { $ref: '#/components/schemas/RunOptions' }
+        passwordConfigured: { type: boolean }
+        passwordEnvironmentVariable: { type: string }
+        dataDir: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    SaveConfigRequest:
+      type: object
+      properties:
+        exePath: { type: string }
+        recipeDir: { type: string }
+        evidenceDir: { type: string }
+        expectedVersion: { type: string }
+        buildDate: { type: string }
+        templateRecipeName: { type: string }
+        userName: { type: string }
+        configurationRoot: { type: string }
+        options: { $ref: '#/components/schemas/RunOptions' }
+
+    ConfigValidationResult:
+      type: object
+      properties:
+        valid: { type: boolean }
+        checkedAt: { type: string, format: date-time }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ValidationIssue' }
+        checks:
+          type: array
+          items: { $ref: '#/components/schemas/PreparationCheck' }
+
+    ValidationIssue:
+      type: object
+      properties:
+        field: { type: string }
+        code:
+          type: string
+          enum: [required, invalid_format, not_found, not_executable, not_writable, verification_failed]
+        message: { type: string }
+
+    PreparationCheck:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [ok, warning, failed] }
+        detail: { type: string }
+
+    RunEvent:
+      type: object
+      required: [protocolVersion, runId, sequence, at, type]
+      properties:
+        protocolVersion: { type: integer, example: 1 }
+        runId: { type: string }
+        sequence: { type: integer, format: int64, description: 同一 runId 内严格递增 }
+        at: { type: string, format: date-time }
+        type:
+          type: string
+          enum:
+            - runCreated
+            - runPreparing
+            - runPrepared
+            - runStarted
+            - runPhase
+            - stepStarted
+            - stepWaiting
+            - stepFinished
+            - stepUnknown
+            - checkpointCreated
+            - checkpointResolved
+            - log
+            - artifactCreated
+            - cleanupStarted
+            - cleanupFinished
+            - pendingFieldEntered
+            - pendingFieldResolved
+            - lockReleased
+            - runFinished
+        stepId: { type: string, nullable: true }
+        phase: { $ref: '#/components/schemas/RunPhase' }
+        status: { $ref: '#/components/schemas/StepStatus' }
+        reason: { type: string, nullable: true }
+        checkpointId: { type: string, nullable: true }
+        artifactId: { type: string, nullable: true }
+        artifactName: { type: string, nullable: true }
+        artifactKind: { type: string, nullable: true }
+        mimeType: { type: string, nullable: true }
+        artifactSize: { type: integer, format: int64, nullable: true }
+        message: { type: string, nullable: true }
+        data:
+          type: object
+          additionalProperties: { type: string }
+
+    RunReport:
+      type: object
+      properties:
+        protocolVersion: { type: integer }
+        runId: { type: string }
+        generatedAt: { type: string, format: date-time }
+        conclusion: { $ref: '#/components/schemas/RunConclusion' }
+        options: { $ref: '#/components/schemas/RunOptions' }
+        config: { $ref: '#/components/schemas/RunConfigSnapshot' }
+        range: { $ref: '#/components/schemas/RangeInfo' }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/StepState' }
+        counts: { $ref: '#/components/schemas/StepCounts' }
+        cleanup: { $ref: '#/components/schemas/CleanupState' }
+        pendingField: { $ref: '#/components/schemas/PendingFieldState' }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ArtifactInfo' }
+        simulated: { type: boolean }
+        eventsCount: { type: integer, format: int64 }
+        note: { type: string }
+
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: machine_busy
+        message: { type: string }
+        currentRun:
+          allOf:
+            - { $ref: '#/components/schemas/RunSnapshot' }
+          nullable: true
+        issues:
+          type: array
+          nullable: true
+          items: { $ref: '#/components/schemas/ValidationIssue' }

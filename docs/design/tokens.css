@@ -1,0 +1,89 @@
+/* ==========================================================================
+   主流程自动化回归 · 本机 Web 执行面板 —— 设计令牌
+   目标：单一来源的颜色/排版/间距/圆角/阴影/动效令牌。
+   用法：前端（React/Vue/Svelte 均可）以 CSS 变量或构建期转为 Tailwind theme。
+   约束：语义色只表达状态语义，不用于装饰；状态必须同时有中文文字。
+   ========================================================================== */
+:root{
+  /* ---------- 中性（背景与文本层级） ---------- */
+  --bg:#f2f4f7;          /* 页面底色 */
+  --surface:#ffffff;     /* 卡片/表格 */
+  --sunken:#f8fafc;      /* 次级容器、表头、只读区 */
+  --line:#d0d5dd;        /* 控件描边 */
+  --line-soft:#e4e7ec;   /* 分隔线 */
+  --ink-900:#101828;     /* 主文本           17.75:1 */
+  --ink-700:#344054;     /* 次主文本         10.46:1 */
+  --ink-600:#475467;     /* 正文/说明         7.69:1 */
+  --ink-500:#667085;     /* 辅助文本         4.97:1（正文最小色，勿再浅） */
+  --ink-400:#98a2b3;     /* 仅装饰：占位、分隔点、禁用图标，不承载信息 */
+
+  /* ---------- 主色（操作，不表达结果） ---------- */
+  --primary:#1a56c4;     /* 6.62:1 on white */
+  --primary-hover:#14459e;
+  --primary-soft:#e9f0fd;
+  --primary-line:#b9cdf4;
+
+  /* ---------- 语义色：成功 / 跳过 / 阻塞 / 失败 / 等待 / 中断 ---------- */
+  --pass:#0f7b53;        --pass-soft:#e6f6ef;    --pass-line:#b7e3cd;     /* 4.72:1 */
+  --skip:#6f5a00;        --skip-soft:#fcf6e3;    --skip-line:#e8dcb0;     /* 6.19:1 */
+  --blocked:#9a3d00;     --blocked-soft:#fdf0e7; --blocked-line:#f0cdb5;  /* 6.18:1 */
+  --failed:#b3261e;      --failed-soft:#fdecea;  --failed-line:#f3c3bf;   /* 5.72:1 */
+  --waiting:#0b5cad;     --waiting-soft:#e8f2fd; --waiting-line:#bcd7f4;  /* 5.89:1 */
+  --unknown:#5b4a86;     --unknown-soft:#f1edfa; --unknown-line:#d5cbec;  /* 6.59:1 */
+  --neutral:#475467;     --neutral-soft:#eef1f5; --neutral-line:#dde2e9;
+
+  /* ---------- 进度条分段（与徽标同源，便于色觉障碍外仍有文字/顺序区分） ---------- */
+  --bar-pass:#0f7b53;
+  --bar-skip:#c9a227;
+  --bar-blocked:#d9730d;
+  --bar-failed:#b3261e;
+  --bar-waiting:#4f93e0;
+
+  /* ---------- 排版 ---------- */
+  --font-sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --font-mono:"Cascadia Mono",Consolas,"SFMono-Regular","Microsoft YaHei UI",monospace;
+  --fs-11:11px;  /* 徽标、标签、元信息 */
+  --fs-12:12px;  /* 辅助说明、表格 */
+  --fs-13:13px;  /* 正文、控件、步骤名 */
+  --fs-14:14px;  /* 卡片/区块标题、主按钮 */
+  --fs-16:16px;  /* 页面标题 */
+  --fs-20:20px;  /* 计数数字 */
+  --lh-tight:1.25; --lh-body:1.55;
+
+  /* ---------- 间距（4 的倍数，禁止随意值） ---------- */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
+
+  /* ---------- 圆角 ---------- */
+  --r-sm:4px;    /* 徽标、标签、代码块内块 */
+  --r-md:6px;    /* 输入框、按钮、提示条 */
+  --r-lg:10px;   /* 卡片、弹层 */
+  --r-pill:999px;
+
+  /* ---------- 阴影 ---------- */
+  --shadow-1:0 1px 2px rgba(16,24,40,.06);
+  --shadow-2:0 10px 28px -16px rgba(16,24,40,.28);
+
+  /* ---------- 焦点与动效 ---------- */
+  --focus:0 0 0 3px rgba(26,86,196,.28);
+  --dur-fast:120ms; --dur-base:180ms;
+}
+
+/* 状态徽标：色 + 文字 + 圆点三重编码 */
+.badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:var(--fs-11);font-weight:700;border:1px solid transparent}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.b-pass{background:var(--pass-soft);color:var(--pass);border-color:var(--pass-line)}
+.b-skip{background:var(--skip-soft);color:var(--skip);border-color:var(--skip-line)}
+.b-blocked{background:var(--blocked-soft);color:var(--blocked);border-color:var(--blocked-line)}
+.b-failed{background:var(--failed-soft);color:var(--failed);border-color:var(--failed-line)}
+.b-waiting{background:var(--waiting-soft);color:var(--waiting);border-color:var(--waiting-line)}
+.b-running{background:var(--primary-soft);color:var(--primary);border-color:var(--primary-line)}
+.b-neutral{background:var(--neutral-soft);color:var(--neutral);border-color:var(--neutral-line)}
+.b-unknown{background:var(--unknown-soft);color:var(--unknown);border-color:var(--unknown-line)}
+
+/* 焦点：所有可交互元素统一，键盘可达 */
+:where(button,input,select,textarea,[tabindex]):focus-visible{outline:none;box-shadow:var(--focus);border-radius:var(--r-md)}
+
+/* 动效：尊重系统减少动效设置；不做循环闪烁（会干扰长时间值守） */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
