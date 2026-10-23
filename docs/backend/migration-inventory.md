@@ -66,7 +66,5 @@
 
 - 27 步真实 UIA 迁移与严格能力补齐（T04—T05）未完成：需要连续编译与实机窗口；迁移后的代码必须实机验证，不能以未验证代码冒充完成。
 - 未实际启动被测程序、未操作设备：按用户要求默认不启动。
-- 未上传 GitHub：`git ls-remote https://github.com/2985084405su-hub/WaferAoiUitest.git` 返回
-  `fatal: could not read Username for 'https://github.com': terminal prompts disabled`；本机无 token、无凭据、`gh` 未安装。
-  该仓库在当前账号下不可匿名读取（API 返回 404）。已在本地初始化并提交，待提供凭据后推送。
-- 目标目录存在透明加密限制：在 `D:\WaferAoiUitest` 内直接构建会出现 CS2015（csc 将文件判为二进制）。绕过方式与建议见根 `README.md`。
+- 已上传 GitHub：分支 `feat/backend-JCRJZDH-6-backend-platform`，远端 HEAD 与本地一致（`5a8cb19`）。
+- 目标目录存在透明加密限制：目录内直接构建会出现 CS2015。源码可用 `rg` 检索；构建在 `D:\waferaoi` 下的临时镜像完成，不需要白名单。

@@ -39,12 +39,13 @@ WaferAoiUitest/
 - `docs/api/openapi.yaml`、事件样例、10 项契约答疑。
 - 编译通过：Contracts / Web / Executor 三个项目 0 警告 0 错误（校验副本）。
 - 模拟端到端冒烟通过：严格策略 3 个网页确认点、失败即停、待现场处理与新轮 409、现场处理解除占用、SSE `sequence` 1..N 无缺口。
+- 已上传：eat/backend-JCRJZDH-6-backend-platform 已推送到 GitHub，远端 HEAD 与本地一致（5a8cb19）。
 
 **未完成（不得当作已交付）**
 
 - 27 步真实 UIA 迁移与严格能力补齐（T04—T05）；当前 `LiveFlow` 显式阻塞，不启动被测程序。
 - 独立发布包与实机联调；未启动被测程序、未操作设备。
-- 上传 GitHub：本机无可用凭据，`git ls-remote` 被要求用户名；仓库 API 对匿名访问返回 404。
+- 实机联调：按用户安排后续到真实机台执行；当前不启动被测程序。
 
 ## 本机环境限制（会影响构建）
 
@@ -56,7 +57,7 @@ WaferAoiUitest/
 2. 立即执行 `dotnet build -p:UseSharedCompilation=false`；
 3. 校验完成后删除临时目录，不修改源仓库文件。
 
-这不是代码问题，但会导致在目标目录内直接构建不可靠。建议由测试机管理员把 `D:\WaferAoiUitest` 加入加密软件白名单，或固定在 `C:\Build` 等受控目录构建。
+这不是代码问题。源码可用 `rg` 正常检索；构建在 `D:\waferaoi` 下的临时镜像完成，暂不需要加密软件白名单。
 
 ## 本机运行（开发期）
 
