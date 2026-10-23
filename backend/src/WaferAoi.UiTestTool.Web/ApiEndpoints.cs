@@ -58,7 +58,7 @@ internal static class ApiEndpoints
             return Results.Json(new
             {
                 items,
-                total = items.Count,
+                total = manager.CountRuns(),
                 limit = take,
                 offset = skip
             }, JsonDefaults.Api);
