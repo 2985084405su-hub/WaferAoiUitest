@@ -6,6 +6,6 @@ publish/
 TestResults/
 
 # 本机调试数据
-data/
-runs/
+/data/
+/runs/
 *.log
