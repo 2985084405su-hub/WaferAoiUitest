@@ -66,8 +66,13 @@ internal sealed partial class MainFlowRunner
             "角度校正页当前配方仍为 " + fileName);
         foreach (string label in new[] { "低阈值", "Die高度", "黑白切割道", "粗校正系数" })
         {
-            Verify.Available(
-                NamedUi.FindRowEdit(_main, label) != null,
+            if (NamedUi.FindRowEdit(_main, label) != null)
+            {
+                continue;
+            }
+
+            // 诊断要再枚举一次 UIA 树，只在真的失败时计算。
+            throw Verify.Blocked(
                 "角度校正页未能唯一定位参数“" + label + "”的输入框（" + NamedUi.ExplainRowEdit(_main, label) +
                 "）；只有确认页面上确实没有该参数时，才说明当前页面分支与用例不符。");
         }
