@@ -6,7 +6,8 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWindowsForms>true</UseWindowsForms>
+    <!-- 真实执行器不再使用 WinForms：人工确认改由网页确认点完成；保留 net472 以便 UIA3 与 FlaUI 4.0。 -->
+    <UseWindowsForms>false</UseWindowsForms>
     <AssemblyName>WaferAoi.UiTestTool.Executor</AssemblyName>
     <RootNamespace>WaferAoi.UiTestTool.Executor</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>

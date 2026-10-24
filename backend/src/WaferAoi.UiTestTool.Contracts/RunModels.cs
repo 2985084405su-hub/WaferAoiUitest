@@ -48,12 +48,12 @@ public sealed class StepDefinition
 }
 
 /// <summary>
-/// 27 步静态清单。Web 快照、执行器和文档共用同一份来源，避免三处漂移。
+/// 45 步静态清单。Web 快照、执行器和文档共用同一份来源，避免三处漂移。
 /// </summary>
 public static class MainFlowCatalog
 {
     /// <summary>本期实现的步骤数。</summary>
-    public const int ImplementedStepCount = 27;
+    public const int ImplementedStepCount = 45;
 
     /// <summary>完整主流程设计步数。</summary>
     public const int DesignedStepCount = 184;
@@ -69,11 +69,12 @@ public static class MainFlowCatalog
         ["03"] = "放片",
         ["04"] = "新建配方 A",
         ["05"] = "晶圆信息",
-        ["06"] = "建档上片"
+        ["06"] = "建档上片",
+        ["07"] = "切割道两点角度校正"
     };
 
     /// <summary>
-    /// 按文档顺序排列的 27 步。标题与源工程 MainFlowStepPlan 完全一致。
+    /// 按文档顺序排列的 45 步。标题与源工程 MainFlowStepPlan 完全一致。
     /// </summary>
     public static readonly IReadOnlyList<StepDefinition> Steps = new List<StepDefinition>
     {
@@ -151,7 +152,66 @@ public static class MainFlowCatalog
             manualInstruction: "等待上片完成，核对实片在运动平台、原 Loadport1 槽1 已空、机械手无遗留片、报警区无搬片报警；完成后在网页确认。",
             observation: "平台有片、来源槽位为 Loadport1 层1、机械手状态及报警可核对"),
         Step("06.05", "点击配方确认当前配方仍为A", "06",
-            observation: "当前配方仍为 A")
+            observation: "当前配方仍为 A"),
+
+        // 07 切割道两点角度校正（07.01—07.18）
+        Step("07.01", "打开晶圆角度校正页并核对点位列表与四个算法参数", "07",
+            observation: "当前编辑配方为 A；点位列表、“增加”“采图调试”和低阈值等四个参数均可见"),
+        Step("07.02", "选择 InspectCamera 相机", "07",
+            hardwareRelated: true,
+            observation: "相机回读为 InspectCamera，运动与光学操作无硬件错误"),
+        Step("07.03", "倍率选择 5X 并点击设置", "07",
+            hardwareRelated: true,
+            observation: "倍率为 5X，设置无失败或未标定提示"),
+        Step("07.04", "明场照明 300 并设置，关闭红外与可见暗场", "07",
+            hardwareRelated: true,
+            observation: "明场勾选且值回读 300；红外（及可见暗场）未勾选并已关闭"),
+        Step("07.05", "核对并设置可见的曝光、硬件增益与逻辑增益", "07",
+            hardwareRelated: true,
+            observation: "可见字段回读 1000us、1/1；未显示字段记为未显示，不记为已设置"),
+        Step("07.06", "选择新转正方式和切割后", "07",
+            observation: "新转正选中、旧转正未选；切割后选中、切割前未选"),
+        Step("07.07", "低阈值输入 50 并回读", "07",
+            observation: "低阈值回读 50（灰度 0—255 内）"),
+        Step("07.08", "Die高度输入 500 并回读", "07",
+            observation: "Die高度回读 500px"),
+        Step("07.09", "黑白切割道填 1、粗校正系数填 1 并回读", "07",
+            observation: "两框回读 1"),
+        Step("07.10", "连续采集并在寸动中取景到水平黑切割道", "07",
+            hardwareRelated: true,
+            manualRequirement: "always",
+            manualInstruction: "图像持续刷新中：用寸动把视野移到片中央附近一条水平黑切割道，确认画面能看见切割道及相邻 Die 边缘、所选行无墨点、晶粒正常，且向 X 正方向 20mm 范围都在片内、轴未接近限位。完成后在网页确认。",
+            observation: "连续采集运行中；画面可见切割道与相邻 Die 边缘；取景位置与 20mm 范围在片内"),
+        Step("07.11", "Z 调焦后停止连续采集并采单张", "07",
+            hardwareRelated: true,
+            manualRequirement: "always",
+            manualInstruction: "步距已改为 0.010：用标为 Z 的上下方向按钮逐步调焦，直到切割道和 Die 边缘清晰、图像非全黑/全白；调好后不要动 Theta，在网页确认。脚本随后恢复步距 0.100、停止连续采集并采单张。",
+            observation: "图像清晰非全黑/全白；连续采集已停止，步距回读 0.100；记录当前 Z/Theta"),
+        Step("07.12", "核对点位列表为空并用“增加”采集第一点", "07",
+            hardwareRelated: true,
+            observation: "列表恰有 1 行，X1/Y1 与当前轴位四舍五入到 4 位小数一致"),
+        Step("07.13", "步距 1.000 点击 X 左箭头 20 次并核验位移", "07",
+            hardwareRelated: true,
+            manualRequirement: "hardwarePolicyOnly",
+            manualInstruction: "在寸动“步距”填 1.000 并离焦，逐次点击 X 轴左侧方向按钮共 20 次（每次等运动停稳再点下一次），不要点 Y 方向按钮；确认 X 读数相对 X1 增加约 20.0000mm、Y 保持不变。完成后在网页确认。",
+            observation: "X 实际读数相对 X1 增加约 20mm，Y 保持 Y1，无限位或运动错误"),
+        Step("07.14", "采单张并采集第二点，核对同 Y 与 20mm 间距", "07",
+            hardwareRelated: true,
+            observation: "列表恰有 2 行；X2 约为 X1＋20mm，Y2＝Y1，第二张图清晰，步距恢复 0.100"),
+        Step("07.15", "保存角度校正并确认无点位过少提示", "07",
+            hardwareRelated: true,
+            observation: "无“点位过少”或“保存失败”提示；列表仍为 2 点，四参数仍 50/500/1/1"),
+        Step("07.16", "移动回第一点并采图调试", "07",
+            hardwareRelated: true,
+            observation: "轴回到第一点 X1/Y1 及已保存焦高；出现非空调试图，无调试算法报错"),
+        Step("07.17", "运行切割道角度校正并确认运行成功提示", "07",
+            hardwareRelated: true,
+            manualRequirement: "hardwarePolicyOnly",
+            manualInstruction: "点击页面底部公共“运行”，等待弹窗；确认提示为“运行成功!”后点击“确定”。没有粗/精校准失败、飞拍超时、限位、标定或相机错误。完成后在网页确认。",
+            observation: "被测程序返回“运行成功!”，无校准失败、飞拍超时、限位、标定或相机错误"),
+        Step("07.18", "读取角度偏移与纠正后角度并留证", "07",
+            hardwareRelated: true,
+            observation: "角度偏移、纠正后角度均为有限数值（允许为 0），保持算法输出，未手填")
     };
 
     /// <summary>按编号索引的步骤定义。</summary>
@@ -164,7 +224,7 @@ public static class MainFlowCatalog
     public static StepDefinition Get(string stepId) =>
         ById.TryGetValue(stepId, out StepDefinition? step)
             ? step
-            : throw new ArgumentException($"步骤 {stepId} 不在本期 27 步登记表中。", nameof(stepId));
+            : throw new ArgumentException($"步骤 {stepId} 不在本期 45 步登记表中。", nameof(stepId));
 
     /// <summary>判断编号是否属于本期范围。</summary>
     /// <param name="stepId">步骤编号。</param>
@@ -259,7 +319,7 @@ public sealed class StepState
 }
 
 /// <summary>
-/// 运行计数。每个步骤只计一次；分母固定 27。
+/// 运行计数。每个步骤只计一次；分母固定 45。
 /// </summary>
 public sealed class StepCounts
 {
@@ -287,7 +347,7 @@ public sealed class StepCounts
     /// <summary>中断且结果未知；不计入四类结果。</summary>
     public int Unknown { get; set; }
 
-    /// <summary>步骤总数，固定为本期 27 步。</summary>
+    /// <summary>步骤总数，固定为本期 45 步。</summary>
     public int Total { get; set; } = MainFlowCatalog.ImplementedStepCount;
 }
 
@@ -466,7 +526,7 @@ public sealed class RunSnapshot
     /// <summary>本期范围说明。</summary>
     public RangeInfo Range { get; set; } = new();
 
-    /// <summary>按文档顺序排列的 27 步状态。</summary>
+    /// <summary>按文档顺序排列的 45 步状态。</summary>
     public List<StepState> Steps { get; set; } = new();
 
     /// <summary>状态计数。</summary>

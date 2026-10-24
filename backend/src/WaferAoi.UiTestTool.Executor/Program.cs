@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using WaferAoi.UiTestTool.Contracts;
 
@@ -62,7 +62,7 @@ internal static class Program
 
                 IExecutorFlow flow = manifest.Simulation
                     ? new SimulationFlow(manifest, writer, checkpoints)
-                    : new LiveFlow(manifest, writer);
+                    : new LiveFlow(manifest, writer, checkpoints);
 
                 flow.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
             }

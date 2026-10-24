@@ -89,7 +89,7 @@ public enum RunConclusion
     /// <summary>尚未形成结论。</summary>
     Pending,
 
-    /// <summary>27 步全部成功且清理通过。</summary>
+    /// <summary>45 步全部成功且清理通过。</summary>
     Passed,
 
     /// <summary>存在跳过项，但没有失败或阻塞。</summary>
@@ -137,7 +137,7 @@ public enum EventType
     /// <summary>准备检查完成。</summary>
     RunPrepared,
 
-    /// <summary>开始执行 27 步。</summary>
+    /// <summary>开始执行 45 步。</summary>
     RunStarted,
 
     /// <summary>阶段变化。</summary>

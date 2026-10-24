@@ -1,6 +1,6 @@
 # WaferAoiUitest
 
-主流程自动化回归的本机 Web 执行工具。本期覆盖原主流程 01—06 节共 27 步；其余 157 步不在本期。
+主流程自动化回归的本机 Web 执行工具。本期覆盖原主流程 **01—07 节共 45 步**（01—06 节 27 步 + 07 节切割道两点角度校正 18 步）；其余 139 步不在本期。
 
 - 需求：JCRJZDH-6（HiFox 任务 `c713889e-28b5-42a4-8e12-c689044f5e81`）
 - 源工程：`D:\waferaoi\UiTests`（只迁移主流程必要依赖）
@@ -15,79 +15,77 @@ WaferAoiUitest/
 │  ├─ WaferAoi.UiTestTool.sln
 │  ├─ src/WaferAoi.UiTestTool.Contracts   共享契约（netstandard2.0）
 │  ├─ src/WaferAoi.UiTestTool.Web         Web 宿主（net8.0-windows）
-│  └─ src/WaferAoi.UiTestTool.Executor    桌面执行器（net472）
+│  └─ src/WaferAoi.UiTestTool.Executor    桌面执行器（net472 x64）
+│     └─ Real/                            真实 UIA 执行（驱动/页面/断言/07 节）
 ├─ frontend/                前端（司小懿，独立项目）
+├─ tools/build-release.ps1  本机发布脚本
+├─ dist/                    发布产物（本机生成，不进版本库）
 ├─ docs/
 │  ├─ api/                  OpenAPI、事件样例、契约答疑（后端唯一写入）
-│  ├─ backend/              迁移清单、27 步能力表
+│  ├─ backend/              迁移清单、45 步能力表、真实运行说明
 │  └─ design/               UI 设计交付（设计 Agent）
-├─ .gitignore  .gitattributes  README.md
+└─ .gitignore  .gitattributes  README.md
 ```
 
 共享文件（根 README、`.gitignore`、`.gitattributes`）改动前先在任务里说一声；`docs/api/` 只由后端修改。
 
-## 当前进度（2026-10-23）
+## 当前进度（2026-10-24）
 
-**已完成并验证**
+**已完成并验证（本机）**
 
-- 27 步静态目录，编号/标题与 `MainFlowStepPlan` 一致；补章节、硬件/版本/人工标记。
-- 本机配置读写：显式路径、版本可选必填、单一硬件策略；密码只从 `WAFER_AOI_UI_PASSWORD` 读取，不回传、不落盘。
-- 单实例机器锁（原子创建）与待现场处理状态持久化；宿主重启不释放占用。
-- 创建运行幂等、运行快照、27 步计数、SSE 补流、确认点命令与回执、证据索引/文件接口、历史与报告。
-- 失败/阻塞即停、后续保持未执行；执行器异常退出标记当前步“结果未知”并进入待现场处理。
-- 执行器事件 JSONL、命令通道、确认等待、模拟流程（六种选项组合/失败/待处理）。
-- `docs/api/openapi.yaml`、事件样例、10 项契约答疑。
-- 编译通过：Contracts / Web / Executor 三个项目 0 警告 0 错误（校验副本）。
-- 模拟端到端冒烟通过：严格策略 3 个网页确认点、失败即停、待现场处理与新轮 409、现场处理解除占用、SSE `sequence` 1..N 无缺口。
-- 已上传：eat/backend-JCRJZDH-6-backend-platform 已推送到 GitHub，远端 HEAD 与本地一致（5a8cb19）。
+- 45 步静态目录：01—06 节 27 步沿用源工程编号/标题，07 节 07.01—07.18 按原用例新增；含章节、硬件/版本/人工标记与现场说明。
+- **真实执行器已落地**（不再是阻塞占位）：
+  - 01—06 由源工程逐文件迁移：`WaferAoiApplication`、`OwnedUi`、`SoftwareStartupFlow`、`RecipeEditorPage`、`NewRecipeDialog`、`WaferInformationPage`、断言与配方 XML 核对；
+  - 07 节新实现：角度页导航、相机/倍率/光源/可见曝光增益、新转正与切割后、四参数、寸动步距与轴位读数、两点采集与 20mm 位移核验、保存、采图调试、运行成功提示、角度结果读取；
+  - 事件、机器锁、幂等、历史、待现场处理全部保留；人工点改走网页确认点。
+- 真实/模拟双入口：真实模式启动被测程序并按事实断言；模拟模式仅联调，报告与快照带 `simulated=true`。
+- 编译：Contracts / Web / Executor Release 0 错误（VS 2022 MSBuild）。
+- 模拟端到端（本机）：45 步；跳过硬件策略 `passedWithSkips`（23/22/0/0）；严格策略 5 个确认点（03.01、03.02、06.01、07.10、07.11）逐个提交后 `passedWithSkips`（44 含 5 人工 / 1 跳过）；报告 45 步、证据下载 200。
+- 真实入口冒烟：真实模式创建运行后执行器被实际启动；未提权/无密码时 01.01 记 `blocked`、其余 44 步 `notRun`、结论 `blocked`、清理 `succeeded`，没有伪造通过。
 
 **未完成（不得当作已交付）**
 
-- 27 步真实 UIA 迁移与严格能力补齐（T04—T05）；当前 `LiveFlow` 显式阻塞，不启动被测程序。
-- 独立发布包与实机联调；未启动被测程序、未操作设备。
-- 实机联调：按用户安排后续到真实机台执行；当前不启动被测程序。
+- 实机 01—07 真实执行：需要管理员会话、现场密码、设备与固定测试片；07 页无 AutomationId 控件的运行时定位唯一性须现场首跑逐条确认。
+- 02.02/06.04 的“完成状态”可读来源、07.10/07.11 的图像内容判据：严格策略读不到即阻塞（详见 `docs/backend/step-capability.md` 缺口表）。
+- 前端仍把范围徽标硬编码为“本期 27 步 / 完整 184 步”（`frontend/src/App.tsx`），需前端改文案；接口返回的步骤与计数已是 45。
 
-## 本机环境限制（会影响构建）
+## 一键运行（真实模式）
 
-本机对 `D:\WaferAoiUitest` 下的新建文件有透明加密/过滤行为：PowerShell 读取为正常文本，但 `csc` 会把这些文件当作二进制（CS2015）或读到密文。`D:\waferaoi` 下同样会在数分钟后出现该现象。
-
-已验证可行的构建方式：
-
-1. 用逐文件 `Copy-Item`（不要 `robocopy` 整目录）复制到 `D:\waferaoi` 下的临时目录；
-2. 立即执行 `dotnet build -p:UseSharedCompilation=false`；
-3. 校验完成后删除临时目录，不修改源仓库文件。
-
-这不是代码问题。源码可用 `rg` 正常检索；构建在 `D:\waferaoi` 下的临时镜像完成，暂不需要加密软件白名单。
-
-## 本机运行（开发期）
-
-前置：Windows、.NET 8 SDK（Web）、.NET Framework 4.7.2（执行器）、管理员会话（UIA 与被测程序要求）。
-
-```powershell
-# 1. 构建（需要用户明确的编译窗口）
-dotnet build backend\WaferAoi.UiTestTool.sln -c Release
-
-# 2. 启动 Web，指向前端构建产物与执行器
-dotnet run --project backend\src\WaferAoi.UiTestTool.Web -- `
-  --port 5180 `
-  --data-dir "$env:LOCALAPPDATA\WaferAoiUiTestTool" `
-  --web-root "D:\WaferAoiUitest\frontend\dist" `
-  --executor "D:\WaferAoiUitest\backend\src\WaferAoi.UiTestTool.Executor\bin\x64\Release\net472\WaferAoi.UiTestTool.Executor.exe"
-
-# 3. 契约联调（模拟执行器，不代表实机通过）
-dotnet run --project backend\src\WaferAoi.UiTestTool.Web -- --simulate --scenario manual
+```bat
+cd /d D:\WaferAoiUitest\dist
+set WAFER_AOI_UI_PASSWORD=<现场 admin 密码>
+start-real.cmd
 ```
 
-数据目录默认 `%LOCALAPPDATA%\WaferAoiUiTestTool`：
+地址 `http://127.0.0.1:5180`。宿主必须以管理员身份启动。完整前置条件、配置项、验证步骤与证据路径见 **`docs/backend/real-run-guide.md`**。
+
+模拟模式：`start-simulate.cmd`（5181）。
+
+## 构建与发布
+
+本机对源码文件有透明加密/过滤行为：`csc` 读取 `.cs` 会被当成二进制（CS2015），`dotnet` 也无法写入受保护目录。已验证可行的方式（`tools/build-release.ps1` 已封装）：
+
+1. 把 `backend` 同步到可写镜像 `%USERPROFILE%\Documents\deepseek-harness\default-workspace\mirror\backend`；
+2. 用 **Visual Studio 2022 的 MSBuild**（已获授权，可正常读取 `.cs`）还原并构建：
+   `"C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe" <sln> /restore /p:Configuration=Release`
+3. 发布 Web 与执行器，合并 `frontend/dist`，复制到 `dist`。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\WaferAoiUitest\tools\build-release.ps1
+```
+
+## 数据目录
+
+默认 `%LOCALAPPDATA%\WaferAoiUiTestTool`（可用 `--data-dir` 指定）：
 
 ```
 config.json              本机配置（无密码）
 lock.json                机器占用 / 待现场处理（跨宿主重启保留）
 runs/<runId>/
-  manifest.json          本轮选项与配置快照
+  manifest.json          本轮选项与配置快照（45 步）
   events.jsonl           唯一有序事件流
   report.json            最终报告
-  artifacts/             证据
+  artifacts/             证据（截图、steps.log、主流程步骤结果.txt、失败快照）
   commands/  acks/       网页确认命令与执行器回执
   executor.stdout.log   执行器诊断输出（非协议流）
 ```
@@ -96,17 +94,18 @@ runs/<runId>/
 
 | 跳过版本断言 | 硬件策略 | 行为 |
 | --- | --- | --- |
-| 否 | strict（两项都不选） | 严格按原步骤；01.02 核验版本与编译日期 |
+| 否 | strict（两项都不选） | 严格按原步骤；01.02 核验版本与编译日期；硬件点自动执行 |
 | 是 | strict | 只跳过版本；01.02 记 `userSkipped` |
 | 否/是 | skip | 硬件步骤/步骤内硬件部分记跳过；混合步骤仍跑软件断言 |
-| 否/是 | manual | 硬件点等待网页确认；完成后仍执行软件断言 |
+| 否/是 | manual | 硬件点等待网页确认；完成后仍执行软件断言（**实机建议**） |
 
 后端只校验两个硬件选项互斥；请求里同时为真返回 400 `invalid_options`，不创建运行、不启动进程。
 
 ## 文档索引
 
+- `docs/backend/real-run-guide.md`：交付包、启动、配置、前置条件、验证与缺口
+- `docs/backend/step-capability.md`：45 步能力表（含 07 实现方式与策略分支）
+- `docs/backend/migration-inventory.md`：源文件归属、已解除耦合、迁移与新增清单
 - `docs/api/openapi.yaml`：完整 HTTP/SSE 契约
 - `docs/api/events-sample.jsonl`：事件样例（可直接回放）
-- `docs/api/contract-decisions.md`：与前端确认的 10 项口径、部署与 mock
-- `docs/backend/migration-inventory.md`：源文件归属、已解除耦合、未做项
-- `docs/backend/step-capability.md`：27 步能力表与人工点
+- `docs/api/contract-decisions.md`：与前端确认的口径、部署与 mock

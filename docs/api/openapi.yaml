@@ -3,12 +3,12 @@ info:
   title: 主流程自动化回归本机执行工具 API
   version: 1.0.0
   description: |
-    JCRJZDH-6 本期（01—06 节 27 步）后端契约。宿主只监听 127.0.0.1 / ::1，不提供账号体系与局域网访问；
+    JCRJZDH-6 本期（01—07 节 45 步）后端契约。宿主只监听 127.0.0.1 / ::1，不提供账号体系与局域网访问；
     密码只由测试机环境变量 `WAFER_AOI_UI_PASSWORD` 提供，任何接口都不返回密码值。
 
     **状态口径**：步骤状态与需求 7.1 一一对应；`passed` 包含自动通过，`operatorConfirmed` 表示人工确认通过；
     `passedWithHardwareSkipped`、`hardwareSkipped`、`userSkipped` 都计入 `counts.skipped`；
-    `waiting` 与 `unknown` 单独计数，不并入 `notRun`。分母固定为本期 27 步。
+    `waiting` 与 `unknown` 单独计数，不并入 `notRun`。分母固定为本期 45 步。
 
     **事件**：`GET /api/runs/{runId}/events` 为 SSE。先补发 `after`（或 `Last-Event-ID`）之后的历史事件，再推送增量；
     SSE 的 `event:` 名与 `data.type` 使用同一套 camelCase 名称；心跳为注释行 `: ping`。事件序号在同一 runId 内严格递增。
@@ -47,7 +47,7 @@ paths:
   /api/catalog/steps:
     get:
       tags: [基础]
-      summary: 本期 27 步静态清单（编号、标题、章节、人工/硬件/版本标记）
+      summary: 本期 45 步静态清单（编号、标题、章节、人工/硬件/版本标记）
       responses:
         '200':
           description: 步骤清单
@@ -56,9 +56,9 @@ paths:
               schema:
                 type: object
                 properties:
-                  implemented: { type: integer, example: 27 }
+                  implemented: { type: integer, example: 45 }
                   designed: { type: integer, example: 184 }
-                  unimplemented: { type: integer, example: 157 }
+                  unimplemented: { type: integer, example: 139 }
                   steps:
                     type: array
                     items: { $ref: '#/components/schemas/StepDefinition' }
@@ -212,7 +212,7 @@ paths:
   /api/runs/{runId}/steps:
     get:
       tags: [运行]
-      summary: 本轮 27 步状态、计数与范围
+      summary: 本轮 45 步状态、计数与范围
       parameters:
         - $ref: '#/components/parameters/RunId'
       responses:
@@ -511,7 +511,7 @@ components:
         notRun: { type: integer }
         waiting: { type: integer, description: 不计入四类结果 }
         unknown: { type: integer, description: 不计入四类结果 }
-        total: { type: integer, example: 27 }
+        total: { type: integer, example: 45 }
 
     CleanupState:
       type: object
@@ -573,9 +573,9 @@ components:
     RangeInfo:
       type: object
       properties:
-        implemented: { type: integer, example: 27 }
+        implemented: { type: integer, example: 45 }
         designed: { type: integer, example: 184 }
-        unimplemented: { type: integer, example: 157 }
+        unimplemented: { type: integer, example: 139 }
 
     RunSnapshot:
       type: object

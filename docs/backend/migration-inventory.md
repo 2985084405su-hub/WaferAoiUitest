@@ -2,7 +2,12 @@
 
 源工程：`D:\waferaoi\UiTests`（net472，FlaUI UIA3 4.0.0）。
 目标：`D:\WaferAoiUitest\backend`，两个入口（Web 宿主 net8.0 + 桌面执行器 net472）。
-范围：01—06 节 27 步；其余 157 步不迁移。
+范围：01—07 节 45 步（01—06 节 27 步 + 07 节 18 步）；其余 139 步不迁移。
+
+## 0. 本阶段更新（2026-10-24）
+
+本文正文第 1—5 节记录 T01 平台层初版（01—06 节 27 步）。2026-10-24 已完成 01—07 节 45 步的真实执行迁移与发布，
+逐项清单见第 6 节；第 1 节表中「待迁移」状态以第 6 节为准。
 
 ## 1. 文件归属
 
@@ -68,3 +73,46 @@
 - 未实际启动被测程序、未操作设备：按用户要求默认不启动。
 - 已上传 GitHub：分支 `feat/backend-JCRJZDH-6-backend-platform`，远端 HEAD 与本地一致（`5a8cb19`）。
 - 目标目录存在透明加密限制：目录内直接构建会出现 CS2015。源码可用 `rg` 检索；构建在 `D:\waferaoi` 下的临时镜像完成，不需要白名单。
+## 6. 01—07 节 45 步真实执行迁移（2026-10-24）
+
+### 6.1 迁移复用（01—06 节，逐文件）
+
+| 源文件 | 目标文件 | 处理 |
+| --- | --- | --- |
+| `Drivers/WaferAoiApplication.cs` | `Executor/Real/WaferAoiApplication.cs` | 保留 PID 归属、启动与窗口枚举；去掉前置检查中的测试框架依赖 |
+| `Drivers/OwnedUi.cs`、`SoftwareUi.cs`、`UiWait.cs` | `Executor/Real/OwnedUi.cs`、`UiWait.cs` | 唯一定位/进程归属/失焦提交/有界等待原样保留；`Assert.Inconclusive` 改为 `StepVerdictException(Blocked)` |
+| `Windows/SoftwareStartupFlow.cs` | `Executor/Real/SoftwareStartupFlow.cs` | 登录、回零提示、进入配方页；新增“确认回零并读取回零状态”分支 |
+| `Pages/RecipeEditorPage.cs`、`NewRecipeDialog.cs` | `Executor/Real/RecipePages.cs` | 只保留主流程调用闭包（搜索、打开、新建、当前配方名、保存） |
+| `Pages/WaferInformationPage*.cs` | `Executor/Real/WaferInformationPage.cs` | 合并两份 partial 的主流程部分；断言改 Verify |
+| `Tests/MainFlow/Sections/*.cs` | `Executor/Real/MainFlowRunner.*.cs` | 按章节拆为 Startup/Recipe/WaferInformation/WaferToStage/StreetAlignment |
+| `Tests/MainFlow/Infrastructure/MainFlowInputs.cs` | `Executor/Real/MainFlowInputs.cs` | 固定输入原值，追加 07 节固定值 |
+| `Tests/MainFlow/Infrastructure/StepRecorder.cs` | `Executor/Real/StepRecord.cs` + `MainFlowRunner` | 状态语义保留（只减弱不增强）；出口改为结构化事件 |
+| `Diagnostics/ArtifactCollector.cs` | `Executor/Real/ExecutorArtifacts.cs` | 截图/UIA 树/进程状态/失败采集；`AddResultFile` 改为 `ArtifactCreated` |
+| `Configuration/UiTestSettings.cs` | `Executor/Real/ExecutorSettings.cs` | 只从本轮 manifest 快照取配置；密码仅读环境变量 |
+| `Drivers/ManualCheckpoint.cs`（WinForms 弹窗） | `CheckpointGate` + `StepContext.Confirm` | 改为网页确认点，完成/阻塞/失败三态 |
+| `TestData/*.cs` | `Executor/Real/TestData.cs` | 只保留主流程用到的选项值/时间字段/配方产物描述 |
+
+### 6.2 本次新实现（07 节及能力补齐）
+
+| 目标 | 说明 |
+| --- | --- |
+| `Executor/Real/StreetAlignmentPage.cs` | 07 页全部实际操作：导航、相机、倍率+设置、明场/红外/暗场、可见曝光增益、新转正/切割后、四参数、连续采集/采单张、寸动步距与方向按钮、点位行/增加/移动、保存/运行、角度结果、图像区亮度统计 |
+| `Executor/Real/NamedUi.cs` | 无 AutomationId 控件的结构化定位：名称 + 控件类型 + 同行几何归属；歧义即返回 null（调用方阻塞），不猜坐标 |
+| `Executor/Real/MainFlowRunner.StreetAlignment.cs` | 07.01—07.18 的步骤编排、位移/同 Y/4 位小数/运行成功等断言 |
+| `MainFlowRunner` 02.02 / 06.03 / 06.04 | 严格策略自动确认回零、自动点击一键上片并处理介质/物料提示、读完成状态；读不到状态即阻塞 |
+| `Executor/Real/Verify.cs`、`StepRecord.cs`、`StringCompat.cs`、`IsExternalInit.cs` | 断言语义、步骤上下文、net472 兼容 |
+| `Contracts/RunModels.cs` | 目录扩到 45 步（新增 07 节 18 步与人工/硬件/观察字段），计数分母随常量变化 |
+
+### 6.3 平台层改动
+
+- `MainFlowCatalog.ImplementedStepCount` 27 → 45；新增章节标题“切割道两点角度校正”。
+- 模拟流程文案、报告备注、`Enums` 注释同步为 45 步 / 其余 139 步。
+- `Executor.csproj` 关闭 WinForms（人工确认已全部改网页）；执行器仍需 net472 x64。
+- 新增 `tools/build-release.ps1` 与 `dist` 发布包（`dist` 不进版本库）。
+
+### 6.4 构建与验证
+
+- 构建：Contracts / Web / Executor Release 均 0 错误；使用 VS 2022 的 MSBuild（本机 csc 对受保护目录无读权限，详见 README“构建与发布”）。
+- 模拟端到端：45 步；跳过硬件 23/22/0/0；严格 5 个确认点（03.01、03.02、06.01、07.10、07.11）全部提交后 44 通过（含 5 人工）/1 跳过；报告 45 步；证据下载 200。
+- 真实入口：真实模式执行器被实际启动；未提权/无密码 → 01.01 `blocked`、其余 `notRun`、结论 `blocked`、清理 `succeeded`，无伪造通过。
+- **未做**：实机 01—07 运行（需管理员、现场密码、设备与固定测试片）；07 页运行时定位唯一性与轴位读数格式待现场首跑确认。

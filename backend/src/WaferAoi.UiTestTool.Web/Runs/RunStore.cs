@@ -316,7 +316,7 @@ internal sealed class RunStore
                 EventsCount = snapshot.LastSequence,
                 Note = snapshot.Simulated
                     ? "模拟运行只用于契约与页面分支验证，不代表实机通过。"
-                    : "本期覆盖 01—06 节 27 步；其余 157 步未实现。"
+                    : "本期覆盖 01—07 节 45 步；其余 139 步未实现。"
             };
         }
     }

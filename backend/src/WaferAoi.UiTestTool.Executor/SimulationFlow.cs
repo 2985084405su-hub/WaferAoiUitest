@@ -43,7 +43,7 @@ internal sealed class SimulationFlow : IExecutorFlow
                 ["simulated"] = "true",
                 ["passwordConfigured"] = _manifest.Config.PasswordConfigured ? "true" : "false"
             });
-        _writer.Emit(EventType.RunStarted, phase: RunPhase.Executing, message: "开始执行本期 27 步（模拟）。");
+        _writer.Emit(EventType.RunStarted, phase: RunPhase.Executing, message: "开始执行本期 45 步（模拟）。");
 
         string stepsLog = Path.Combine(_manifest.RunDir, "artifacts", "steps.log");
         File.WriteAllText(stepsLog, $"{DateTimeOffset.Now:O} 模拟运行 {_manifest.RunId} 开始。\r\n", new UTF8Encoding(false));
