@@ -79,6 +79,60 @@ internal static class NamedUi
                 SafeControlType(element) == ControlType.CheckBox && NameContains(element, keyword)))
             ?.AsCheckBox();
 
+    /// <summary>
+    /// 按行标签定位同一行的勾选框。
+    /// 本页勾选框本身没有可访问名称（Name 为空），“明场照明”等文字是独立的 Text，
+    /// 所以不能按“含明场的勾选框”找；标签会以“容器 Text + 内部 Text”重复出现，按矩形去重后
+    /// 要求恰好解析出一个勾选框。
+    /// </summary>
+    /// <param name="root">查找根。</param>
+    /// <param name="label">行标签文字。</param>
+    /// <returns>唯一勾选框；缺失或多义时返回 null。</returns>
+    public static CheckBox? FindRowCheckBox(AutomationElement root, string label)
+    {
+        AutomationElement[] labels = DedupeByRect(Descendants(root).Where(element =>
+            SafeControlType(element) == ControlType.Text && NameContains(element, label)));
+        CheckBox[] checkBoxes = Descendants(root)
+            .Where(element => SafeControlType(element) == ControlType.CheckBox)
+            .Select(element => element.AsCheckBox())
+            .ToArray();
+
+        var resolved = new List<CheckBox>();
+        foreach (AutomationElement anchor in labels)
+        {
+            Rectangle anchorRect = Rect(anchor);
+            if (anchorRect.IsEmpty)
+            {
+                continue;
+            }
+
+            CheckBox? best = null;
+            double bestDistance = double.MaxValue;
+            foreach (CheckBox checkBox in checkBoxes)
+            {
+                Rectangle rect = Rect(checkBox);
+                if (rect.IsEmpty || Math.Abs(CenterY(rect) - CenterY(anchorRect)) > RowTolerancePx)
+                {
+                    continue;
+                }
+
+                double distance = Math.Abs(rect.X - anchorRect.Right);
+                if (distance < bestDistance)
+                {
+                    best = checkBox;
+                    bestDistance = distance;
+                }
+            }
+
+            if (best != null && resolved.All(existing => RuntimeKey(existing) != RuntimeKey(best)))
+            {
+                resolved.Add(best);
+            }
+        }
+
+        return resolved.Count == 1 ? resolved[0] : null;
+    }
+
     /// <summary>按名称逐字查找单选按钮。</summary>
     /// <param name="root">查找根。</param>
     /// <param name="name">单选按钮文字。</param>
@@ -100,53 +154,139 @@ internal static class NamedUi
     /// <summary>
     /// 按标签定位同一行的输入框：先唯一定位标签元素，再在同行带内取最近的 Edit；
     /// 同行带内没有 Edit 时向上回溯最多三层容器再找，仍找不到返回 null。
+    ///
+    /// 页面上的红色说明文字也含参数名（例如“低阈值:(范围0-255)要求大于切割道灰度值…”），
+    /// 所以逐字相等的标签优先；只有没有逐字标签时才退回包含匹配，并按“同行输入框”的唯一性裁决。
     /// </summary>
     /// <param name="root">查找根。</param>
     /// <param name="label">标签文字。</param>
     /// <returns>输入框；歧义或缺失时为 null。</returns>
     public static AutomationElement? FindRowEdit(AutomationElement root, string label)
     {
-        AutomationElement? anchor = Unique(Descendants(root).Where(element =>
-            SafeControlType(element) is ControlType.Text &&
-            NameContains(element, label)));
-        if (anchor == null)
+        AutomationElement[] texts = Descendants(root)
+            .Where(element => SafeControlType(element) == ControlType.Text && NameContains(element, label))
+            .ToArray();
+        if (texts.Length == 0)
         {
             return null;
         }
 
-        Rectangle anchorRect = Rect(anchor);
-        var candidates = new List<(AutomationElement Element, double Distance)>();
-        foreach (AutomationElement edit in Descendants(root).Where(element =>
-                     SafeControlType(element) is ControlType.Edit or ControlType.Spinner))
+        AutomationElement[] exact = texts.Where(element => NameEquals(element, label)).ToArray();
+        AutomationElement[] anchors = exact.Length > 0 ? exact : texts;
+
+        AutomationElement[] edits = Descendants(root)
+            .Where(element => SafeControlType(element) is ControlType.Edit or ControlType.Spinner)
+            .ToArray();
+
+        var resolved = new List<AutomationElement>();
+        foreach (AutomationElement anchor in anchors)
         {
-            Rectangle rect = Rect(edit);
-            if (rect.IsEmpty || Math.Abs(CenterY(rect) - CenterY(anchorRect)) > RowTolerancePx)
+            AutomationElement? edit = RowEdit(anchor, edits);
+            if (edit != null && !resolved.Any(existing => existing.Equals(edit)))
             {
-                continue;
+                resolved.Add(edit);
+            }
+        }
+
+        return resolved.Count == 1 ? resolved[0] : null;
+    }
+
+    /// <summary>
+    /// 在锚点同一行内取最近的输入框；同行没有时只在“恰好含一个输入框”的容器内取，
+    /// 避免在参数区这种多行 Grid 里退回到别的行的输入框。
+    /// </summary>
+    /// <param name="anchor">标签锚点。</param>
+    /// <param name="edits">页面内全部输入框快照。</param>
+    /// <returns>输入框；无法唯一确定时为 null。</returns>
+    private static AutomationElement? RowEdit(AutomationElement anchor, AutomationElement[] edits)
+    {
+        Rectangle anchorRect = Rect(anchor);
+        if (!anchorRect.IsEmpty)
+        {
+            AutomationElement? nearest = null;
+            double nearestDistance = double.MaxValue;
+            foreach (AutomationElement edit in edits)
+            {
+                Rectangle rect = Rect(edit);
+                if (rect.IsEmpty || Math.Abs(CenterY(rect) - CenterY(anchorRect)) > RowTolerancePx)
+                {
+                    continue;
+                }
+
+                double distance = Math.Abs(rect.X - anchorRect.Right);
+                if (distance < nearestDistance)
+                {
+                    nearest = edit;
+                    nearestDistance = distance;
+                }
             }
 
-            candidates.Add((edit, Math.Abs(rect.X - anchorRect.Right)));
+            if (nearest != null)
+            {
+                return nearest;
+            }
         }
 
-        if (candidates.Count > 0)
-        {
-            candidates.Sort((left, right) => left.Distance.CompareTo(right.Distance));
-            return candidates[0].Element;
-        }
-
-        // 卡片式布局中标签与输入框可能分属上下相邻容器；只在最近的三层祖先内查找，避免跨区域误取。
         AutomationElement? container = anchor.Parent;
         for (int depth = 0; depth < 3 && container != null; depth++, container = container.Parent)
         {
-            AutomationElement? edit = container.FindFirstDescendant(cf =>
-                cf.ByControlType(ControlType.Edit));
-            if (edit != null)
+            AutomationElement[] inside = container
+                .FindAllDescendants(cf => cf.ByControlType(ControlType.Edit))
+                .Take(2)
+                .ToArray();
+            if (inside.Length == 1)
             {
-                return edit;
+                return inside[0];
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 说明 FindRowEdit 没能唯一定位的原因：含该文字的元素总数、其中逐字标签数、同行命中的输入框数。
+    /// 只用于失败信息，不参与定位判断。
+    /// </summary>
+    /// <param name="root">查找根。</param>
+    /// <param name="label">标签文字。</param>
+    /// <returns>简短诊断文字。</returns>
+    public static string ExplainRowEdit(AutomationElement root, string label)
+    {
+        AutomationElement[] texts = Descendants(root)
+            .Where(element => SafeControlType(element) == ControlType.Text && NameContains(element, label))
+            .ToArray();
+        int exactCount = texts.Count(element => NameEquals(element, label));
+        AutomationElement[] edits = Descendants(root)
+            .Where(element => SafeControlType(element) is ControlType.Edit or ControlType.Spinner)
+            .ToArray();
+
+        var rowEdits = new HashSet<string>(StringComparer.Ordinal);
+        foreach (AutomationElement anchor in texts)
+        {
+            AutomationElement? edit = RowEdit(anchor, edits);
+            if (edit != null)
+            {
+                rowEdits.Add(RuntimeKey(edit));
+            }
+        }
+
+        return "含该文字的元素 " + texts.Length + " 个（逐字标签 " + exactCount + " 个），同行命中输入框 " +
+               rowEdits.Count + " 个";
+    }
+
+    /// <summary>元素运行时标识，用于对 UIA 元素去重。</summary>
+    /// <param name="element">元素。</param>
+    /// <returns>运行时可唯一定位的键。</returns>
+    private static string RuntimeKey(AutomationElement element)
+    {
+        try
+        {
+            return string.Join(",", element.Properties.RuntimeId.Value);
+        }
+        catch (Exception)
+        {
+            return Guid.NewGuid().ToString("N");
+        }
     }
 
     /// <summary>读取输入框当前值（优先 Value 模式）。</summary>
@@ -176,46 +316,72 @@ internal static class NamedUi
         }
     }
 
+    /// <summary>轴位标签文字：X: / Y： / Z= / T: / Theta:（不带数值）。</summary>
+    private static readonly Regex AxisLabelPattern = new(
+        @"^(?<axis>X|Y|Z|T|THETA|Θ|θ)\s*[:：=]?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     /// <summary>
     /// 从页面文字中读取 X/Y/Z/Theta 实际轴位。
-    /// 只接受“轴名 + 冒号/等号 + 数字”这一明确格式；读不全时返回 null，不推断。
+    /// 兼容两种页面写法：
+    /// 1) 一个元素内就是“X: 12.3456”；
+    /// 2) 标签 Text（“X:”）与数值 Edit 是两个相邻元素、同一行（本页角度校正页即此写法）。
+    /// 两种都读不到 X/Y 时返回 null，不推断。
     /// </summary>
     /// <param name="root">查找根。</param>
     /// <returns>轴位；缺失时为 null。</returns>
     public static Axes? TryReadAxes(AutomationElement root)
     {
+        AutomationElement[] elements = Descendants(root);
         var values = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-        foreach (AutomationElement element in Descendants(root))
+
+        foreach (AutomationElement element in elements)
         {
             if (SafeControlType(element) is not (ControlType.Text or ControlType.Edit))
             {
                 continue;
             }
 
-            string text;
-            try
-            {
-                text = element.Name ?? string.Empty;
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-
-            Match match = AxisPattern.Match(text.Trim());
+            Match match = AxisPattern.Match(SafeName(element).Trim());
             if (!match.Success)
             {
                 continue;
             }
 
-            string axis = match.Groups["axis"].Value.ToUpperInvariant();
-            if (axis is "Θ") axis = "THETA";
-            if (!double.TryParse(match.Groups["value"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+            if (double.TryParse(match.Groups["value"].Value, NumberStyles.Float, CultureInfo.InvariantCulture,
+                    out double inline))
+            {
+                values[NormalizeAxis(match.Groups["axis"].Value)] = inline;
+            }
+        }
+
+        AutomationElement[] edits = elements.Where(element => SafeControlType(element) == ControlType.Edit).ToArray();
+        foreach (AutomationElement label in DedupeByRect(elements.Where(element =>
+                     SafeControlType(element) == ControlType.Text)))
+        {
+            Match match = AxisLabelPattern.Match(SafeName(label).Trim());
+            if (!match.Success)
             {
                 continue;
             }
 
-            values[axis] = value;
+            string axis = NormalizeAxis(match.Groups["axis"].Value);
+            if (values.ContainsKey(axis))
+            {
+                continue;
+            }
+
+            AutomationElement? edit = RowEdit(label, edits);
+            if (edit == null)
+            {
+                continue;
+            }
+
+            if (double.TryParse(ReadEditValue(edit), NumberStyles.Float, CultureInfo.InvariantCulture,
+                    out double paired))
+            {
+                values[axis] = paired;
+            }
         }
 
         if (!values.TryGetValue("X", out double x) || !values.TryGetValue("Y", out double y))
@@ -228,6 +394,50 @@ internal static class NamedUi
         return new Axes(x, y, z, theta);
     }
 
+    /// <summary>轴名归一化：T/Θ 都按 Theta。</summary>
+    /// <param name="axis">读到的轴名。</param>
+    /// <returns>归一化轴名。</returns>
+    private static string NormalizeAxis(string axis)
+    {
+        string upper = axis.ToUpperInvariant();
+        return upper is "T" or "Θ" ? "THETA" : upper;
+    }
+
+    /// <summary>安全读取元素名称。</summary>
+    /// <param name="element">元素。</param>
+    /// <returns>名称或空串。</returns>
+    private static string SafeName(AutomationElement element)
+    {
+        try
+        {
+            return element.Name ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>按矩形去重：WPF 常把同一标签暴露成“容器 Text + 内部 Text”，两张同名同位置。</summary>
+    /// <param name="elements">候选元素。</param>
+    /// <returns>去重后的元素。</returns>
+    private static AutomationElement[] DedupeByRect(IEnumerable<AutomationElement> elements)
+    {
+        var result = new List<AutomationElement>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (AutomationElement element in elements)
+        {
+            Rectangle rect = Rect(element);
+            string key = rect.IsEmpty ? "empty:" + RuntimeKey(element) : rect.ToString();
+            if (seen.Add(key))
+            {
+                result.Add(element);
+            }
+        }
+
+        return result.ToArray();
+    }
+
     /// <summary>按轴标签与方向按钮的同一行归属定位寸动方向按钮。</summary>
     /// <param name="root">查找根。</param>
     /// <param name="axis">轴标签，X/Y/Z。</param>
@@ -238,8 +448,8 @@ internal static class NamedUi
         string axis,
         StreetAlignmentPage.Direction direction)
     {
-        AutomationElement? label = Unique(Descendants(root).Where(element =>
-            SafeControlType(element) == ControlType.Text && NameEquals(element, axis)));
+        AutomationElement? label = Unique(DedupeByRect(Descendants(root).Where(element =>
+            SafeControlType(element) == ControlType.Text && NameEquals(element, axis))));
         if (label == null)
         {
             return null;

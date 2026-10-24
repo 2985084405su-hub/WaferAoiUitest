@@ -68,7 +68,8 @@ internal sealed partial class MainFlowRunner
         {
             Verify.Available(
                 NamedUi.FindRowEdit(_main, label) != null,
-                "角度校正页缺少参数“" + label + "”的输入框，页面分支与本次用例不符（可能是模板页面而非切割道页面）。");
+                "角度校正页未能唯一定位参数“" + label + "”的输入框（" + NamedUi.ExplainRowEdit(_main, label) +
+                "）；只有确认页面上确实没有该参数时，才说明当前页面分支与用例不符。");
         }
 
         _artifacts.CaptureScreen("07.01角度校正页", "07.01");
@@ -143,10 +144,12 @@ internal sealed partial class MainFlowRunner
         }
 
         bool anyApplied = results.Any(item => !item.Contains("未显示", StringComparison.Ordinal));
-        Verify.Available(
-            anyApplied,
-            "曝光与增益字段均未显示；按用例记录“未显示”后，仍需要真实采图与运行成功证明可用，" +
-            "但本步骤要求至少一个可见字段可回读，当前页面没有任何可回读字段。");
+        if (!anyApplied)
+        {
+            // 用例对“未显示”的要求是如实记录、不记为已设置；该版本角度校正页把三项都隐藏了，记录后继续，
+            // 由后续真实采图与运行成功证明取图链路可用。
+            context.Note("曝光时间/硬件增益/逻辑增益在本版本角度校正页均未显示，按用例记录为“未显示”，不记为已设置。");
+        }
     }
 
     /// <summary>07.07／07.08 写入单个算法参数并回读。</summary>

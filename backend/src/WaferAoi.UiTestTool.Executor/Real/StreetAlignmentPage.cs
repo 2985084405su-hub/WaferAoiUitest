@@ -69,10 +69,19 @@ internal sealed class StreetAlignmentPage
     /// </summary>
     private void SelectNavigationItem()
     {
-        if (_ui.Optional(NavigationId, _main) != null)
+        AutomationElement? direct = _ui.Optional(NavigationId, _main);
+        if (direct != null)
         {
-            _ui.Select(NavigationId, _main);
-            return;
+            try
+            {
+                // 直接复用已找到的元素：切换配方时导航树会重建，重复按 ID 查找会拿到失效节点并超时。
+                _ui.Select(direct, "步骤导航项「" + NavigationLabel + "」");
+                return;
+            }
+            catch (Exception exception)
+            {
+                _log("按 AutomationId 选中角度校正步骤失败，改用标签兜底：" + exception.Message);
+            }
         }
 
         TreeItem? item = NamedUi.FindNavigationTreeItem(_main, NavigationLabel);
@@ -103,33 +112,104 @@ internal sealed class StreetAlignmentPage
     /// <param name="magnification">倍率文字，例如 5X。</param>
     public void SelectMagnification(string magnification)
     {
-        ComboBox? target = null;
-        foreach (AutomationElement candidate in _main.FindAllDescendants(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.ComboBox)))
+        // 倍率框和它的“设置”按钮都在 UCMagnification 面板（AutomationId=dMagnification）内。
+        // 下拉项是 TurretLensInfo 对象，可访问名称是类型名，只能按展开后项内文字匹配倍率。
+        AutomationElement? panel = _main.FindFirstDescendant(cf => cf.ByAutomationId("dMagnification"));
+        AutomationElement? element = panel?.FindFirstDescendant(cf =>
+            cf.ByControlType(FlaUI.Core.Definitions.ControlType.ComboBox));
+        element ??= FindComboContainingOption(magnification);
+
+        Verify.Available(
+            element != null,
+            "无法定位主复检转塔倍率框：dMagnification 面板内没有组合框，也没有包含选项 '" + magnification + "' 的组合框。");
+        ComboBox combo = element!.AsComboBox();
+        try
         {
-            string id = SafeId(candidate);
-            if (string.Equals(id, "cb_camera", StringComparison.Ordinal))
+            SelectComboBoxItemByText(combo, magnification, "倍率");
+        }
+        catch (Exception exception)
+        {
+            throw Verify.Blocked(
+                "倍率下拉框中没有可唯一定位的选项 '" + magnification + "'；当前选项：" + DescribeComboItems(combo) +
+                "。原始信息：" + exception.Message);
+        }
+
+        AutomationElement button = NamedUi.FindNearestButton(_main, combo, "设置")
+            ?? throw Verify.Blocked("未能在倍率框同一行定位“设置”按钮。");
+        Click(button, "倍率设置");
+        _log("倍率已选择并设置：" + magnification);
+    }
+
+    /// <summary>按“包含指定选项文字”在整页内找唯一组合框（倍率面板定位失败时的兜底）。</summary>
+    /// <param name="text">选项文字。</param>
+    /// <returns>组合框；不存在或多义时返回 null。</returns>
+    private ComboBox? FindComboContainingOption(string text)
+    {
+        ComboBox? target = null;
+        foreach (AutomationElement candidate in _main.FindAllDescendants(cf =>
+                     cf.ByControlType(FlaUI.Core.Definitions.ControlType.ComboBox)))
+        {
+            if (string.Equals(SafeId(candidate), "cb_camera", StringComparison.Ordinal))
             {
                 continue;
             }
 
-            if (ComboContains(candidate, magnification))
+            if (!ComboContains(candidate, text))
             {
-                if (target != null)
-                {
-                    throw Verify.Blocked("页面上有多个包含倍率选项 '" + magnification + "' 的组合框，无法唯一定位倍率框。");
-                }
-
-                target = candidate.AsComboBox();
+                continue;
             }
+
+            if (target != null)
+            {
+                throw Verify.Blocked("页面上有多个包含选项 '" + text + "' 的组合框，无法唯一定位倍率框。");
+            }
+
+            target = candidate.AsComboBox();
         }
 
-        Verify.Available(target != null, "无法定位包含倍率选项 '" + magnification + "' 的组合框（主复检转塔倍率框）。");
-        SelectComboBoxItemByText(target!, magnification, "倍率");
+        return target;
+    }
 
-        AutomationElement button = NamedUi.FindNearestButton(_main, target!, "设置")
-            ?? throw Verify.Blocked("未能在倍率框同一行定位“设置”按钮。");
-        Click(button, "倍率设置");
-        _log("倍率已选择并设置：" + magnification);
+    /// <summary>列出组合框当前选项的可访问名称与项内文字，用于定位失败时说明现场。</summary>
+    /// <param name="combo">组合框。</param>
+    /// <returns>选项描述。</returns>
+    private static string DescribeComboItems(ComboBox combo)
+    {
+        bool expanded = false;
+        try
+        {
+            combo.Expand();
+            expanded = true;
+            string[] parts = combo.Items.Take(12).Select(item =>
+            {
+                string[] texts = item
+                    .FindAllDescendants(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Text))
+                    .Select(text => (text.Name ?? string.Empty).Trim())
+                    .Where(text => text.Length > 0)
+                    .ToArray();
+                return "'" + (item.Name ?? string.Empty) + "'" +
+                       (texts.Length == 0 ? string.Empty : "[" + string.Join("/", texts) + "]");
+            }).ToArray();
+            return parts.Length == 0 ? "（展开后没有读到选项）" : string.Join("，", parts);
+        }
+        catch (Exception exception)
+        {
+            return "（读取选项失败：" + exception.Message + "）";
+        }
+        finally
+        {
+            if (expanded)
+            {
+                try
+                {
+                    combo.Collapse();
+                }
+                catch (Exception)
+                {
+                    // 已自动收起时忽略。
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -141,8 +221,8 @@ internal sealed class StreetAlignmentPage
     {
         var handled = new List<string>();
 
-        CheckBox? bright = NamedUi.FindCheckBoxContaining(_main, "明场");
-        Verify.Available(bright != null, "未能在 UIA 树中定位“明场照明”勾选框。");
+        CheckBox? bright = NamedUi.FindRowCheckBox(_main, "明场照明");
+        Verify.Available(bright != null, "未能在 UIA 树中按“明场照明”行定位勾选框。");
         if (bright!.IsChecked != true)
         {
             bright.IsChecked = true;
@@ -155,12 +235,12 @@ internal sealed class StreetAlignmentPage
         Click(brightSet, "明场设置");
         handled.Add("明场照明=" + brightValue);
 
-        handled.Add(DisableLightingRow("红外", "红外照明"));
+        handled.Add(DisableLightingRow("红外照明", "红外照明"));
 
-        CheckBox? dark = NamedUi.FindCheckBoxContaining(_main, "暗场");
+        CheckBox? dark = NamedUi.FindRowCheckBox(_main, "暗场照明");
         if (dark != null)
         {
-            handled.Add(DisableLightingRow("暗场", "暗场照明"));
+            handled.Add(DisableLightingRow("暗场照明", "暗场照明"));
         }
         else
         {
@@ -176,8 +256,8 @@ internal sealed class StreetAlignmentPage
     /// <returns>处理结果说明。</returns>
     private string DisableLightingRow(string keyword, string displayName)
     {
-        CheckBox? checkBox = NamedUi.FindCheckBoxContaining(_main, keyword);
-        Verify.Available(checkBox != null, "未能在 UIA 树中定位“" + displayName + "”勾选框。");
+        CheckBox? checkBox = NamedUi.FindRowCheckBox(_main, keyword);
+        Verify.Available(checkBox != null, "未能在 UIA 树中按“" + displayName + "”行定位勾选框。");
         if (checkBox!.IsChecked == true)
         {
             checkBox.IsChecked = false;
@@ -263,7 +343,8 @@ internal sealed class StreetAlignmentPage
     public void SetAlgorithmParameter(string label, string value)
     {
         AutomationElement edit = NamedUi.FindRowEdit(_main, label)
-            ?? throw Verify.Blocked("未能在 UIA 树中定位参数“" + label + "”的输入框。");
+            ?? throw Verify.Blocked("未能在 UIA 树中唯一定位参数“" + label + "”的输入框（" +
+                                    NamedUi.ExplainRowEdit(_main, label) + "）。");
         SetRowValue(edit, label, value);
     }
 
