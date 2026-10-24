@@ -75,6 +75,14 @@ cd /d "%~dp0"
 if "%WAFER_AOI_UI_PASSWORD%"=="" (
   echo [提示] 未设置 WAFER_AOI_UI_PASSWORD：真实运行会在启动前检查处阻塞并写明原因。
 )
+netstat -ano | findstr /r /c:"127.0.0.1:5180 .*LISTENING" >nul 2>&1
+if not errorlevel 1 (
+  echo [错误] 端口 5180 已被占用，可能有一个旧的宿主仍在运行，它显示的还是旧版本步骤表。
+  echo        查看占用： netstat -ano ^| findstr :5180
+  echo        结束后重试： taskkill /PID ^<占用进程PID^> /F
+  pause
+  exit /b 1
+)
 start "" http://127.0.0.1:5180
 WaferAoi.UiTestTool.Web.exe --port 5180 --web-root "%~dp0web" --executor "%~dp0executor\WaferAoi.UiTestTool.Executor.exe"
 endlocal
