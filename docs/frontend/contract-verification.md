@@ -44,6 +44,9 @@ dotnet build D:\tmp\h6\backend\WaferAoi.UiTestTool.sln -c Debug
 
 ## 3. 发现的后端缺陷（前端侧不掩盖，交由后端修）
 
+> 2026-10-24 更新：3.1、3.2 均已在后端 `3b79372` 修复并随 `a52968c` 并入共用分支，
+> 下面保留的是当时的复现记录和影响判断。
+
 ### 3.1 宿主合成事件被写成多行 JSON，破坏 `events.jsonl` 一行一条
 
 - 现象：每个场景的 `events.jsonl` 行数都大于事件数（如 81 行 / 73 条）。`lockReleased` 等事件是缩进格式的多行 JSON。
@@ -82,3 +85,45 @@ dotnet build D:\tmp\h6\backend\WaferAoi.UiTestTool.sln -c Debug
   `checkpoint_already_submitted`（并发提交时出现）与 `run_not_waiting` 的代码分支。
 - 局域网/多宿主并发、浏览器长期断线重连的真实网络条件。
 - 页面在 320px 窄屏与读屏下的表现：本次只做了 1500×2400 的渲染截图，未做设备矩阵。
+
+## 6. 合并后复验（2026-10-24，共用分支 `a52968c`，前端修复 `a1ef72e`）
+
+合并树 = 前端 `550cbc7` + 后端 `3b79372`。后端在合并树（`git archive` 到未加密目录）重新构建：
+Contracts / Web / Executor **0 警告 0 错误**；前端 `npm run lint`、`npm run build` 通过，`dist` 重新生成
+（271.93 kB / gzip 83.83 kB，mock 仍单独成 chunk）。
+
+后端场景用合并后的 Web 宿主 + 执行器 `--simulate`（每个场景独立数据目录与端口）：
+
+| 场景 | 快照 | 事件落盘 | 重启补流 |
+| --- | --- | --- | --- |
+| strict | `finished` / `passed`，清理 `succeeded`，成功 27（含人工 3）/ 总计 27，`alive=false`、`exitCode=0` | **73 行 = 73 条**，末条 `lockReleased`，无坏行 | `after=0` **73/73**（活动会话与宿主重启后一致） |
+| 执行器被杀（停 03.01） | `pendingField` / `pendingField`，当前步 03.01 `unknown`，成功 4 / 未执行 22 / 未知 1，`alive=false`、`exitCode=-1`，新运行 409 `machine_busy` | **19 行 = 19 条**，末条 `runFinished`，无 `lockReleased` | `after=0` **19/19**；重启后 `alive` 仍为 `false`，占用保持、仍 409 |
+| pending-field | `pendingField` / `pendingField`，成功 27（含人工 3），`alive=false`，未勾选两项提交 400，运行中 409 | 解除前 70/70；解除后 **72 行 = 72 条**（新增单行 `pendingFieldResolved` + `lockReleased`） | `after=0` **72/72** |
+
+- `events.jsonl` 每行都是单行 JSON（strict 最长 1069 字符，`badLines=0`）；`manifest.json`、`report.json` 仍是缩进格式。
+- 现场处理解除后 `phase=finished`，`conclusion` 仍为 `pendingField`（原结论未被改写），报告与历史同口径。
+- 中断后 `executor.alive=false`，宿主重启、补写 `stepUnknown` / `pendingFieldEntered` / `runFinished` 后都没有回弹。
+
+浏览器侧（headless Chrome + CDP，真实 `dist` + 真后端）：
+
+- strict：网页开始执行，03.01 / 03.02 / 06.01 三个确认点逐个提交；结束后计数 `27 / 0 / 0 / 0 / 0`、
+  结论“通过”、清理“清理成功”、03.01 显示“成功·人工确认”；1680 与 1280 宽度横向溢出均为 0。
+- 执行器被杀：显示“占用未释放 / 待现场处理”、`中断·结果未知 1`、03.01 为“中断·结果未知”，
+  “开始执行”禁用并提示“待现场处理：占用未释放，禁止新一轮。”；页面不再出现“执行器运行中”。
+- 历史：列表与详情都只读，详情无任何确认/执行按钮；被杀一轮在历史中为“待现场处理 / 4·0·0·0·22”。
+- 控制台：0 个 JS 错误、0 个未处理 Promise；只有一条 `favicon.ico` 404，已在本轮加 `favicon.svg` 链接修掉。
+
+**本轮修的前端问题（`a1ef72e`）**：中断后后端快照里的 `checkpoint.status` 仍是 `waiting`（`PendingFieldEntered`
+不清空 checkpoint），页面会继续渲染可点击的“完成 / 报告阻塞 / 判定失败”，与“待现场处理”自相矛盾；
+点击后虽被后端 409 `run_not_waiting` 拒绝，但属于误导性操作入口。现改为仅当
+`phase=waitingHuman` 且未进入待现场处理、未结束时才显示确认卡。
+
+**关于第 4 点（前端兜底逻辑）**：前端不读 `events.jsonl`、不按行数校验事件，也不展示或回弹
+`executor.alive`（`alive` 只在 `types.ts` 与 `mock.ts` 出现，页面只用 `lastEventAt`/`phase`/`conclusion`）。
+因此没有“多行事件/行数大于事件数”或 `alive` 回弹的兜底需要移除。保留的两处是传输层韧性，与本次契约修复无关：
+SSE 单帧 `JSON.parse` 失败时跳过该帧；以及仅在 `connection=lost` 时每 1.5s 轮询快照（运行结束即停止）。
+
+**仍待后端确认的契约点**：中断或进入待现场处理后，快照里的 `checkpoint` 仍为 `waiting`。
+建议在 `PendingFieldEntered`/`MarkInterruptedAsync` 时清空或标记为 `expired`，让任何按快照渲染的消费者
+都不再把它当成可提交的确认点；前端目前的 `phase` 门控只是防御。
+
