@@ -385,6 +385,56 @@ internal static class NamedUi
         return best;
     }
 
+    /// <summary>配方步骤导航树 AutomationId（生产源码 TreeView x:Name）。</summary>
+    public const string NavigationTreeId = "ucTree";
+
+    /// <summary>
+    /// 在配方步骤导航树内按标签文字定位唯一的 TreeViewItem。
+    /// 生产程序尚未在 TreeViewItem 上暴露 AutomationId 时使用：同一标签会同时出现在
+    /// 行内 Text 与其内部 Text 上，先归并到最近的 TreeItem 祖先，再要求恰好一个；
+    /// 缺失或多义时返回 null，由调用方阻塞，不按序号或坐标猜测。
+    /// </summary>
+    /// <param name="root">查找根（主窗口）。</param>
+    /// <param name="label">步骤显示文字。</param>
+    /// <returns>唯一树项；缺失或多义时返回 null。</returns>
+    public static TreeItem? FindNavigationTreeItem(AutomationElement root, string label)
+    {
+        AutomationElement? tree = root.FindFirstDescendant(cf => cf.ByAutomationId(NavigationTreeId));
+        if (tree == null)
+        {
+            return null;
+        }
+
+        var items = new Dictionary<string, TreeItem>(StringComparer.Ordinal);
+        foreach (AutomationElement named in Descendants(tree).Where(element => NameEquals(element, label)))
+        {
+            AutomationElement? current = named;
+            while (current != null && !current.Equals(tree) && SafeControlType(current) != ControlType.TreeItem)
+            {
+                current = current.Parent;
+            }
+
+            if (current == null || current.Equals(tree))
+            {
+                continue;
+            }
+
+            string runtimeId;
+            try
+            {
+                runtimeId = string.Join(",", current.Properties.RuntimeId.Value);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            items[runtimeId] = current.AsTreeItem();
+        }
+
+        return items.Count == 1 ? items.Values.First() : null;
+    }
+
     /// <summary>枚举后代，容忍 WPF 失效 peer。</summary>
     /// <param name="root">根元素。</param>
     /// <returns>后代快照。</returns>

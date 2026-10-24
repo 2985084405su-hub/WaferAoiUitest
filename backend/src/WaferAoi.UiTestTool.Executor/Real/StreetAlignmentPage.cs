@@ -22,6 +22,9 @@ internal sealed class StreetAlignmentPage
     /// <summary>角度校正导航项 AutomationId。</summary>
     public const string NavigationId = "RecipeStep.WaferThetaAlignment";
 
+    /// <summary>角度校正步骤在导航树中的显示文字（资源键 WaferThetaAlignment）。</summary>
+    private const string NavigationLabel = "晶圆角度校正";
+
     /// <summary>图像宿主候选 AutomationId（Cognex 宿主，用于截图统计而非像素内容断言）。</summary>
     private static readonly string[] ImageHostIds = { "VPImage", "camVpGrab", "imgVP", "imageView" };
 
@@ -53,10 +56,35 @@ internal sealed class StreetAlignmentPage
     /// <summary>07.01 打开角度校正页并等待点位列表、增加、采图调试出现。</summary>
     public void Open()
     {
-        _ui.Invoke(NavigationId, _main);
+        SelectNavigationItem();
         UiWait.UntilNotNull(() => NamedUi.FindButton(_main, "增加"), _timeout, "角度校正页“增加”按钮出现");
         UiWait.UntilNotNull(() => NamedUi.FindButton(_main, "采图调试"), _timeout, "角度校正页“采图调试”按钮出现");
         _log("已进入切割道两点角度校正页。");
+    }
+
+    /// <summary>
+    /// 选中导航树中的角度校正步骤：优先用 TreeViewItem 上的 AutomationId；
+    /// 被测程序把 ID 放在模板 Grid 上时（Grid 无 UIA 对等体，ID 不进自动化树），
+    /// 按导航树内的标签文字 + 最近的 TreeItem 祖先唯一定位，不按键鼠或坐标回退。
+    /// </summary>
+    private void SelectNavigationItem()
+    {
+        if (_ui.Optional(NavigationId, _main) != null)
+        {
+            _ui.Select(NavigationId, _main);
+            return;
+        }
+
+        TreeItem? item = NamedUi.FindNavigationTreeItem(_main, NavigationLabel);
+        if (item == null)
+        {
+            throw Verify.Blocked(
+                "配方步骤导航树中未能唯一定位“" + NavigationLabel + "”步骤：既没有 AutomationId=" +
+                NavigationId + "，也没有唯一同名节点。");
+        }
+
+        _ui.Select(item, "步骤导航项「" + NavigationLabel + "」");
+        _log("导航项未暴露 AutomationId（被测程序需重新构建）；已按标签定位并选中：" + NavigationLabel);
     }
 
     /// <summary>07.02 选择相机。</summary>

@@ -113,6 +113,8 @@ start-real.cmd
 
 以上都是**能力缺口**，不是“通过”。每次阻塞都会在步骤原因、`steps.log`、失败证据（UIA 树/截图/进程状态）里写明缺什么，便于现场一次补齐。
 
+07.01 的步骤导航项：产品曾把 `AutomationProperties.AutomationId` 写在 TreeView 模板的 Grid 上，Grid 没有 UIA 对等体，ID 不会进入自动化树（UIA 树里只能看到 Name 为视图模型类型名的 TreeItem），于是按 ID 定位必然超时阻塞。执行器现在优先按 `RecipeStep.WaferThetaAlignment` 选中 TreeViewItem；若被测程序仍未把该 ID 落到 TreeViewItem 上，则退回“导航树（`ucTree`）内标签文字 + 最近的 TreeItem 祖先”的唯一定位，多义或缺失才阻塞。产品源码已在 `UCOperateList.xaml` 的 `ItemContainerStyle` 上输出该 ID，重新构建被测程序后即走 ID 路径。
+
 ## 7. 验证方式（现场按顺序做）
 
 1. `start-real.cmd` 打开页面，确认顶部范围显示 45 步、章节含 07。

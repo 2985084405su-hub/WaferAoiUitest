@@ -165,6 +165,24 @@ internal sealed class OwnedUi
         LogTiming(id, "Invoke", timer, readyAt);
     }
 
+    /// <summary>通过 SelectionItemPattern 选中已定位的导航项；不使用键鼠或坐标回退。</summary>
+    /// <param name="element">已定位的控件。</param>
+    /// <param name="description">诊断与日志用的业务描述。</param>
+    public void Select(AutomationElement element, string description)
+    {
+        var timer = Stopwatch.StartNew();
+        RequirePattern(element.Patterns.SelectionItem.IsSupported, description, "SelectionItem");
+        Wait(() => element.IsEnabled && !element.IsOffscreen, description + " 可操作");
+        TimeSpan readyAt = timer.Elapsed;
+        element.Patterns.SelectionItem.Pattern.Select();
+        LogTiming(description, "Select", timer, readyAt);
+    }
+
+    /// <summary>按 ID 选中唯一控件（如配方步骤导航项）。</summary>
+    /// <param name="id">控件 AutomationId。</param>
+    /// <param name="root">查找根。</param>
+    public void Select(string id, AutomationElement? root = null) => Select(Find(id, root: root), id);
+
     /// <summary>使用 ValuePattern 写入并回读（密码不回读、不记录）。</summary>
     /// <param name="id">输入框 ID。</param>
     /// <param name="value">完整值。</param>
