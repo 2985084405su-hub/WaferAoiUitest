@@ -21,6 +21,9 @@ export function CheckpointCard({ run, now, onSubmit }: CheckpointCardProps) {
 
   // 上一轮的“已提交”状态由父组件用 key={checkpointId} 隔离，不在这里做状态重置。
   if (!checkpoint || checkpoint.status !== 'waiting' || !step) return null;
+  // 执行被中断后快照里的 checkpoint 仍可能停在 waiting，但此时已没有执行器在等命令；
+  // 只有本轮确实停在人工确认点时才提供操作，避免在待现场处理/已结束时显示旧确认按钮。
+  if (run.phase !== 'waitingHuman' || run.pendingField.active || run.finishedAt) return null;
 
   const elapsed = now - Date.parse(checkpoint.createdAt);
   const instructions = checkpoint.instruction
