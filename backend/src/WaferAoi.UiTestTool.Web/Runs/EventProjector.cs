@@ -30,9 +30,10 @@ internal static class EventProjector
         RunSnapshot snapshot = session.Snapshot;
         snapshot.LastSequence = item.Sequence;
         snapshot.UpdatedAt = item.At;
+        // Alive 只由执行器启动/退出的生命周期决定；投影（含宿主补写的终结事件）只更新
+        // 最近事件时间与序号，否则中断后补写的事件会把 FinalizeAsync 设的 false 覆盖回 true。
         snapshot.Executor.LastEventAt = item.At;
         snapshot.Executor.LastSequence = item.Sequence;
-        snapshot.Executor.Alive = true;
 
         switch (item.Type)
         {
