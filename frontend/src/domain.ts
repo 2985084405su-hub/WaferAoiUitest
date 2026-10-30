@@ -5,6 +5,7 @@
 import type {
   CleanupStatus,
   HardwarePolicy,
+  RangeInfo,
   RunConclusion,
   RunOptions,
   RunPhase,
@@ -115,6 +116,30 @@ export function computeCounts(steps: StepState[]): StepCounts {
 /** 已收敛 = 有终态的步骤；等待与中断不计入。 */
 export function convergedCount(counts: StepCounts): number {
   return counts.passed + counts.skipped + counts.blocked + counts.failed;
+}
+
+/**
+ * 章节范围文案（如「01—07 节」），由实际步骤定义推导，不写死章节号。
+ * 没有步骤定义时返回空串，调用方据此省略章节前缀，而不是猜一个范围。
+ */
+export function sectionRangeText(steps: Array<{ section: string }>): string {
+  const sections = [...new Set(steps.map((step) => step.section))].sort();
+  if (sections.length === 0) return '';
+  const first = sections[0];
+  const last = sections[sections.length - 1];
+  return first === last ? `${first} 节` : `${first}—${last} 节`;
+}
+
+/**
+ * 范围说明唯一文案：步骤数与未实现数只认后端范围声明。
+ * 只说明“本期登记了多少步”，不把登记或模拟结果表述为实机通过。
+ */
+export function rangeNoteText(range: RangeInfo | null, sectionText: string): string {
+  if (!range) {
+    return '尚未取得本期步骤范围（GET /api/catalog/steps）。本页结论不代表整条实机主流程通过。';
+  }
+  const scope = sectionText ? ` ${sectionText}共 ` : '共 ';
+  return `本期范围${scope}${range.implemented} 步已登记；完整设计 ${range.designed} 步，其余 ${range.unimplemented} 步未实现、不计作跳过。本页结论不代表整条实机主流程通过。`;
 }
 
 export function policyText(options: RunOptions): string {

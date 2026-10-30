@@ -21,7 +21,7 @@ import type {
   RunOptions,
   RunSnapshot,
   RunSummary,
-  StepDefinition,
+  StepCatalog,
   StepState,
   StepStatus,
 } from '../types';
@@ -39,7 +39,7 @@ interface CatalogStep {
   observation: string;
 }
 
-/** 抄自 Contracts\RunModels.cs 的 MainFlowCatalog，供模拟使用。 */
+/** 抄自 Contracts\RunModels.cs 的 MainFlowCatalog，供模拟使用：01—07 节共 45 步。 */
 const CATALOG: CatalogStep[] = [
   { stepId: '01.01', title: '启动并检查单实例及硬件状态登录窗口', section: '01', sectionTitle: '启动', hardware: 'partial', manualRequirement: 'none', observation: '登录窗口出现、单实例检查通过、硬件状态可在启动流程中观察' },
   { stepId: '01.02', title: '登录后核对软件版本和编译日期并截图', section: '01', sectionTitle: '启动', hardware: 'none', manualRequirement: 'none', versionAssertion: true, observation: '页面显示的版本号与编译日期与本轮安装记录一致' },
@@ -68,7 +68,36 @@ const CATALOG: CatalogStep[] = [
   { stepId: '06.03', title: '确认一键上片按钮并交现场执行上片', section: '06', sectionTitle: '建档上片', hardware: 'full', manualRequirement: 'hardwarePolicyOnly', instruction: '点击一键上片后，按原用例要求完成现场确认，再在网页确认现场已执行上片。', observation: '一键上片被触发，符合原用例条件的提示已处理' },
   { stepId: '06.04', title: '等待上片完成并核对平台及来源槽位', section: '06', sectionTitle: '建档上片', hardware: 'full', manualRequirement: 'hardwarePolicyOnly', observation: '平台有片、来源槽位为 Loadport1 层1、机械手状态及报警可核对' },
   { stepId: '06.05', title: '点击配方确认当前配方仍为A', section: '06', sectionTitle: '建档上片', hardware: 'none', manualRequirement: 'none', observation: '当前配方仍为 A' },
+
+  /* 07 切割道两点角度校正（07.01—07.18） */
+  { stepId: '07.01', title: '打开晶圆角度校正页并核对点位列表与四个算法参数', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'none', manualRequirement: 'none', observation: '当前编辑配方为 A；点位列表、“增加”“采图调试”和低阈值等四个参数均可见' },
+  { stepId: '07.02', title: '选择 InspectCamera 相机', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '相机回读为 InspectCamera，运动与光学操作无硬件错误' },
+  { stepId: '07.03', title: '倍率选择 5X 并点击设置', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '倍率为 5X，设置无失败或未标定提示' },
+  { stepId: '07.04', title: '明场照明 300 并设置，关闭红外与可见暗场', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '明场勾选且值回读 300；红外（及可见暗场）未勾选并已关闭' },
+  { stepId: '07.05', title: '核对并设置可见的曝光、硬件增益与逻辑增益', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '可见字段回读 1000us、1/1；未显示字段记为未显示，不记为已设置' },
+  { stepId: '07.06', title: '选择新转正方式和切割后', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'none', manualRequirement: 'none', observation: '新转正选中、旧转正未选；切割后选中、切割前未选' },
+  { stepId: '07.07', title: '低阈值输入 50 并回读', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'none', manualRequirement: 'none', observation: '低阈值回读 50（灰度 0—255 内）' },
+  { stepId: '07.08', title: 'Die高度输入 500 并回读', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'none', manualRequirement: 'none', observation: 'Die高度回读 500px' },
+  { stepId: '07.09', title: '黑白切割道填 1、粗校正系数填 1 并回读', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'none', manualRequirement: 'none', observation: '两框回读 1' },
+  { stepId: '07.10', title: '连续采集并在寸动中取景到水平黑切割道', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'full', manualRequirement: 'always', instruction: '图像持续刷新中：用寸动把视野移到片中央附近一条水平黑切割道，确认画面能看见切割道及相邻 Die 边缘、所选行无墨点、晶粒正常，且向 X 正方向 20mm 范围都在片内、轴未接近限位。完成后在网页确认。', observation: '连续采集运行中；画面可见切割道与相邻 Die 边缘；取景位置与 20mm 范围在片内' },
+  { stepId: '07.11', title: 'Z 调焦后停止连续采集并采单张', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'full', manualRequirement: 'always', instruction: '步距已改为 0.010：用标为 Z 的上下方向按钮逐步调焦，直到切割道和 Die 边缘清晰、图像非全黑/全白；调好后不要动 Theta，在网页确认。脚本随后恢复步距 0.100、停止连续采集并采单张。', observation: '图像清晰非全黑/全白；连续采集已停止，步距回读 0.100；记录当前 Z/Theta' },
+  { stepId: '07.12', title: '核对点位列表为空并用“增加”采集第一点', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '列表恰有 1 行，X1/Y1 与当前轴位四舍五入到 4 位小数一致' },
+  { stepId: '07.13', title: '步距 1.000 点击 X 左箭头 20 次并核验位移', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'hardwarePolicyOnly', instruction: '在寸动“步距”填 1.000 并离焦，逐次点击 X 轴左侧方向按钮共 20 次（每次等运动停稳再点下一次），不要点 Y 方向按钮；确认 X 读数相对 X1 增加约 20.0000mm、Y 保持不变。完成后在网页确认。', observation: 'X 实际读数相对 X1 增加约 20mm，Y 保持 Y1，无限位或运动错误' },
+  { stepId: '07.14', title: '采单张并采集第二点，核对同 Y 与 20mm 间距', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '列表恰有 2 行；X2 约为 X1＋20mm，Y2＝Y1，第二张图清晰，步距恢复 0.100' },
+  { stepId: '07.15', title: '保存角度校正并确认无点位过少提示', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '无“点位过少”或“保存失败”提示；列表仍为 2 点，四参数仍 50/500/1/1' },
+  { stepId: '07.16', title: '移动回第一点并采图调试', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '轴回到第一点 X1/Y1 及已保存焦高；出现非空调试图，无调试算法报错' },
+  { stepId: '07.17', title: '运行切割道角度校正并确认运行成功提示', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'hardwarePolicyOnly', instruction: '点击页面底部公共“运行”，等待弹窗；确认提示为“运行成功!”后点击“确定”。没有粗/精校准失败、飞拍超时、限位、标定或相机错误。完成后在网页确认。', observation: '被测程序返回“运行成功!”，无校准失败、飞拍超时、限位、标定或相机错误' },
+  { stepId: '07.18', title: '读取角度偏移与纠正后角度并留证', section: '07', sectionTitle: '切割道两点角度校正', hardware: 'partial', manualRequirement: 'none', observation: '角度偏移、纠正后角度均为有限数值（允许为 0），保持算法输出，未手填' },
 ];
+
+/** 完整设计步数（对齐 MainFlowCatalog.DesignedStepCount）；本期实现数由 CATALOG 推导，不另写死。 */
+const DESIGNED_STEPS = 184;
+
+const CATALOG_RANGE = {
+  implemented: CATALOG.length,
+  designed: DESIGNED_STEPS,
+  unimplemented: DESIGNED_STEPS - CATALOG.length,
+};
 
 const nowIso = () => new Date().toISOString();
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -119,18 +148,21 @@ export class MockBackend implements Backend {
     return { ...this.config };
   }
 
-  async getStepCatalog(): Promise<StepDefinition[]> {
-    return CATALOG.map((step) => ({
-      stepId: step.stepId,
-      title: step.title,
-      section: step.section,
-      sectionTitle: step.sectionTitle,
-      hardwareRelated: step.hardware !== 'none',
-      versionAssertion: Boolean(step.versionAssertion),
-      manualRequirement: step.manualRequirement,
-      manualInstruction: step.instruction || '',
-      observation: step.observation,
-    }));
+  async getStepCatalog(): Promise<StepCatalog> {
+    return {
+      ...CATALOG_RANGE,
+      steps: CATALOG.map((step) => ({
+        stepId: step.stepId,
+        title: step.title,
+        section: step.section,
+        sectionTitle: step.sectionTitle,
+        hardwareRelated: step.hardware !== 'none',
+        versionAssertion: Boolean(step.versionAssertion),
+        manualRequirement: step.manualRequirement,
+        manualInstruction: step.instruction || '',
+        observation: step.observation,
+      })),
+    };
   }
 
   async saveConfig(patch: Partial<ConfigView>) {
@@ -207,9 +239,19 @@ export class MockBackend implements Backend {
         passwordEnvironmentVariable: this.config.passwordEnvironmentVariable,
         passwordConfigured: this.config.passwordConfigured,
       },
-      range: { implemented: 27, designed: 184, unimplemented: 157 },
+      range: { ...CATALOG_RANGE },
       steps: CATALOG.map((step) => this.toStepState(step)),
-      counts: { passed: 0, manualPassed: 0, skipped: 0, blocked: 0, failed: 0, notRun: 27, waiting: 0, unknown: 0, total: 27 },
+      counts: {
+        passed: 0,
+        manualPassed: 0,
+        skipped: 0,
+        blocked: 0,
+        failed: 0,
+        notRun: CATALOG.length,
+        waiting: 0,
+        unknown: 0,
+        total: CATALOG.length,
+      },
       cleanup: { status: 'notStarted', reason: '' },
       pendingField: { active: false, reason: '', processId: 0, note: '', processExitedVerified: false, deviceStateVerified: false, requiredAction: '' },
       executor: { processId: 48216, alive: true, startedAt: nowIso(), lastEventAt: nowIso(), lastSequence: 0 },
@@ -412,7 +454,7 @@ export class MockBackend implements Backend {
         passwordEnvironmentVariable: 'WAFER_AOI_UI_PASSWORD',
         passwordConfigured: true,
       },
-      range: { implemented: 27, designed: 184, unimplemented: 157 },
+      range: { ...CATALOG_RANGE },
       steps,
       counts,
       cleanup: { status: 'succeeded', reason: '已结束本轮拥有的进程' },
@@ -519,7 +561,7 @@ export class MockBackend implements Backend {
       data: { simulated: 'true' },
     });
     run.phase = 'executing';
-    this.emit('runStarted', { phase: 'executing', message: '开始执行本期 27 步（模拟）。' });
+    this.emit('runStarted', { phase: 'executing', message: `开始执行本期 ${CATALOG.length} 步（模拟）。` });
 
     for (const step of run.steps) {
       if (this.cancelled) return;

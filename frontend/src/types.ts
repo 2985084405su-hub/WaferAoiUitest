@@ -187,6 +187,14 @@ export interface RangeInfo {
   unimplemented: number;
 }
 
+/**
+ * GET /api/catalog/steps 的返回体：本期范围声明 + 该范围内的步骤静态定义。
+ * 范围数字只认后端，前端不写死 27/45/184 这类数字。
+ */
+export interface StepCatalog extends RangeInfo {
+  steps: StepDefinition[];
+}
+
 export interface RunSnapshot {
   runId: string;
   createdAt: string;

@@ -1,19 +1,21 @@
-import { POLICY_LABEL, convergedCount, fmtDuration } from '../domain';
-import type { RunSnapshot, StepCounts } from '../types';
+import { POLICY_LABEL, convergedCount, fmtDuration, rangeNoteText } from '../domain';
+import type { RangeInfo, RunSnapshot, StepCounts } from '../types';
 import { Badge } from './Badge';
 
-function conclusionText(run: RunSnapshot, counts: StepCounts): string {
+function conclusionText(run: RunSnapshot, counts: StepCounts, sectionText: string): string {
   const mode = POLICY_LABEL[run.options.hardwarePolicy];
+  // 章节前缀由本轮实际步骤推导，避免把 01—07 的运行写成 01—06。
+  const scope = sectionText || '本轮';
   if (run.pendingField.active || run.conclusion === 'pendingField') {
     return '待现场处理：硬件状态未确认，占用未释放。现场处理完成后不把原结论改为成功，也不自动续跑。';
   }
   const failed = run.steps.find((step) => step.status === 'failed');
   if (run.conclusion === 'failed' && failed) {
-    return `01—06 执行未通过：${failed.stepId} ${failed.title} 失败后立即停止，其余 ${counts.notRun} 步保持未执行。`;
+    return `${scope}执行未通过：${failed.stepId} ${failed.title} 失败后立即停止，其余 ${counts.notRun} 步保持未执行。`;
   }
   const blocked = run.steps.find((step) => step.status === 'blocked');
   if (run.conclusion === 'blocked' && blocked) {
-    return `01—06 执行阻塞：${blocked.stepId} ${blocked.title} 无法满足条件，已停止，其余 ${counts.notRun} 步保持未执行。`;
+    return `${scope}执行阻塞：${blocked.stepId} ${blocked.title} 无法满足条件，已停止，其余 ${counts.notRun} 步保持未执行。`;
   }
   if (run.conclusion === 'interrupted') {
     return `运行中断，最后事件时间 ${run.executor.lastEventAt ? new Date(run.executor.lastEventAt).toLocaleString() : '未知'}；当前步骤结果未知，未开始步骤仍未执行。`;
@@ -23,16 +25,26 @@ function conclusionText(run: RunSnapshot, counts: StepCounts): string {
   }
   if (run.conclusion === 'passed' || run.conclusion === 'passedWithSkips') {
     const skipNote = counts.skipped > 0 ? `，其中 ${counts.skipped} 步按选项跳过` : '';
-    return `01—06 执行完成（${mode}）：${counts.total} 步已收敛${skipNote}。本结论不代表整条实机主流程通过。`;
+    return `${scope}执行完成（${mode}）：${counts.total} 步已收敛${skipNote}。本结论不代表整条实机主流程通过。`;
   }
   return `执行中（${mode}）：已收敛 ${convergedCount(counts)} / ${counts.total} 步。`;
 }
 
-export function RunSummary({ run, now }: { run: RunSnapshot | null; now: number }) {
+interface RunSummaryProps {
+  run: RunSnapshot | null;
+  now: number;
+  /** 本轮记录的范围声明；没有运行时退回后端 catalog 声明。 */
+  range: RangeInfo | null;
+  /** 当前展示步骤的章节范围文案，如「01—07 节」。 */
+  sectionRange: string;
+}
+
+export function RunSummary({ run, now, range, sectionRange }: RunSummaryProps) {
   const counts = run?.counts;
   const liveStep = run?.steps.find((step) => step.status === 'running' || step.status === 'waiting');
   const converged = counts ? convergedCount(counts) : 0;
-  const total = counts?.total ?? 27;
+  // 分母只认本轮快照；没有快照时用范围声明，不再退回写死的 27。
+  const total = counts?.total ?? range?.implemented ?? 0;
   const runningFor = liveStep?.status === 'running' && liveStep.startedAt
     ? now - Date.parse(liveStep.startedAt)
     : null;
@@ -51,7 +63,10 @@ export function RunSummary({ run, now }: { run: RunSnapshot | null; now: number 
     <section className="card" aria-labelledby="summary-title">
       <div className="card-head">
         <h2 id="summary-title">本轮汇总</h2>
-        <span className="muted">已收敛步骤（分母为本期 27 步，不是 184 步）</span>
+        <span className="muted">
+          已收敛步骤（分母为本期{sectionRange ? ` ${sectionRange}` : ''} {range?.implemented ?? total} 步，不是完整设计{' '}
+          {range?.designed ?? '—'} 步）
+        </span>
       </div>
 
       <div className="counts" id="counts">
@@ -72,7 +87,7 @@ export function RunSummary({ run, now }: { run: RunSnapshot | null; now: number 
           <span>失败</span>
         </div>
         <div className="count c-notrun">
-          <b>{counts?.notRun ?? 27}</b>
+          <b>{counts?.notRun ?? total}</b>
           <span>未执行</span>
         </div>
       </div>
@@ -90,22 +105,22 @@ export function RunSummary({ run, now }: { run: RunSnapshot | null; now: number 
             <span className="muted">中断 {counts.unknown}</span>
           </>
         ) : null}
-        <span className="muted">合计 {counts?.total ?? 27} / 27</span>
+        <span className="muted">
+          合计 {counts?.total ?? total} / {range?.implemented ?? total}
+        </span>
       </div>
 
       <div className="progress" aria-hidden="true">
-        <span style={{ width: `${(converged / total) * 100}%` }} />
+        <span style={{ width: `${total > 0 ? Math.min((converged / total) * 100, 100) : 0}%` }} />
       </div>
 
-      <p className="range-note">
-        本期已实现 01—06 节 27 步；完整设计 184 步，其余 157 步未实现。本页结论不代表整条实机主流程通过。
-      </p>
+      <p className="range-note">{rangeNoteText(range, sectionRange)}</p>
       <p className="live" role="status" aria-live="polite">
         {live}
       </p>
       {run ? (
         <div className="result-row">
-          <span className="muted">结论：{conclusionText(run, counts ?? run.counts)}</span>
+          <span className="muted">结论：{conclusionText(run, counts ?? run.counts, sectionRange)}</span>
         </div>
       ) : null}
     </section>

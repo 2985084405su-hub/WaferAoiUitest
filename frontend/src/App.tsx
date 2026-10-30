@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from './components/Badge';
 import { Banner } from './components/Banner';
 import { Toasts } from './components/Toasts';
+import { rangeNoteText } from './domain';
 import { useSession } from './state/useSession';
 import { CurrentRunView } from './views/CurrentRunView';
 import { HistoryDetailView } from './views/HistoryDetailView';
@@ -22,7 +23,7 @@ export default function App() {
     localStorage.setItem('wafer.demoScenario', scenario);
   }, [scenario, session.backendKind]);
 
-  const { run, connection } = session;
+  const { run, connection, range, sectionRange } = session;
   const lockLabel = run?.pendingField.active
     ? '占用未释放'
     : run && run.phase !== 'finished'
@@ -65,7 +66,9 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <h1>主流程自动化回归</h1>
-          <Badge tone="neutral">本期 27 步 / 完整 184 步</Badge>
+          <Badge tone="neutral">
+            {range ? `本期 ${range.implemented} 步 / 完整 ${range.designed} 步` : '范围待加载'}
+          </Badge>
         </div>
         <div className="topmeta">
           <Badge tone={lockTone}>{lockLabel}</Badge>
@@ -111,9 +114,7 @@ export default function App() {
         <HistoryDetailView session={session} runId={historyRunId} onBack={() => setView('history')} />
       ) : null}
 
-      <footer className="foot">
-        本期已实现 01—06 节 27 步；完整设计 184 步，其余 157 步未实现。本页结论不代表整条实机主流程通过。
-      </footer>
+      <footer className="foot">{rangeNoteText(range, sectionRange)}</footer>
 
       <Toasts items={session.toasts} />
     </>

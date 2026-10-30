@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createBackend, ApiRequestError, type Backend } from '../api/backend';
-import { convergedCount } from '../domain';
+import { convergedCount, sectionRangeText } from '../domain';
 import type {
   CheckpointResult,
   ConfigValidationResult,
@@ -18,6 +18,7 @@ import type {
   FieldResolutionResponse,
   HardwarePolicy,
   PreparationCheck,
+  RangeInfo,
   RunEvent,
   RunSnapshot,
   RunSummary,
@@ -92,6 +93,7 @@ export function useSession() {
   const [run, setRun] = useState<RunSnapshot | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [catalog, setCatalog] = useState<StepDefinition[] | null>(null);
+  const [catalogRange, setCatalogRange] = useState<RangeInfo | null>(null);
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [connection, setConnection] = useState<ConnectionState>('idle');
   const [prepChecks, setPrepChecks] = useState<PreparationCheck[] | null>(null);
@@ -134,11 +136,23 @@ export function useSession() {
         setConfigLoaded(true);
         backend
           .getStepCatalog()
-          .then((steps) => {
-            if (alive) setCatalog(steps);
+          .then((payload) => {
+            if (!alive) return;
+            setCatalog(payload?.steps ?? null);
+            setCatalogRange(
+              payload
+                ? {
+                    implemented: payload.implemented,
+                    designed: payload.designed,
+                    unimplemented: payload.unimplemented,
+                  }
+                : null,
+            );
           })
           .catch(() => {
-            if (alive) setCatalog(null);
+            if (!alive) return;
+            setCatalog(null);
+            setCatalogRange(null);
           });
         const [current, runs] = await Promise.all([backend.getCurrentRun(), backend.listRuns()]);
         if (!alive) return;
@@ -452,7 +466,7 @@ export function useSession() {
     }
   }, [showToast]);
 
-  /** 未运行时的 27 步清单：来自后端步骤定义，前端不内置步骤表。 */
+  /** 未运行时的本期步骤清单：来自后端步骤定义，前端不内置步骤表。 */
   const idleSteps = useMemo<StepState[]>(
     () =>
       (catalog ?? []).map((definition) => ({
@@ -479,6 +493,15 @@ export function useSession() {
   // 计数以后端快照为准：步骤状态与计数都由事件投影产出，前端再做一次推导会出现两套口径。
   const counts = useMemo(() => (run ? run.counts : null), [run]);
   const converged = useMemo(() => (counts ? convergedCount(counts) : 0), [counts]);
+
+  /** 当前展示的步骤范围：有本轮快照用本轮记录，没有就用后端 catalog 声明。 */
+  const sectionRange = useMemo(
+    () => sectionRangeText(run ? run.steps : idleSteps),
+    [run, idleSteps],
+  );
+
+  /** 概览/页脚用的本期范围：catalog 声明优先，catalog 不可用时退回本轮快照的范围。 */
+  const range = useMemo<RangeInfo | null>(() => catalogRange ?? run?.range ?? null, [catalogRange, run]);
 
   return {
     ready,
@@ -509,6 +532,9 @@ export function useSession() {
     resolvePendingField,
     history,
     catalog,
+    catalogRange,
+    range,
+    sectionRange,
     idleSteps,
     refreshHistory,
     loadRun,

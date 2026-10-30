@@ -28,14 +28,14 @@ import type {
   RunEvent,
   RunSnapshot,
   RunSummary,
-  StepDefinition,
+  StepCatalog,
 } from '../types';
 
 export interface Backend {
   readonly kind: 'http' | 'mock';
   getConfig(): Promise<ConfigView>;
-  /** 27 步静态定义；后端未提供该接口时返回 null，界面降级为空态说明。 */
-  getStepCatalog(): Promise<StepDefinition[] | null>;
+  /** 本期范围步骤的静态定义与范围声明；后端未提供该接口时返回 null，界面降级为空态说明。 */
+  getStepCatalog(): Promise<StepCatalog | null>;
   saveConfig(patch: Partial<ConfigView>): Promise<ConfigView>;
   validateConfig(skipVersionAssertion: boolean): Promise<ConfigValidationResult>;
   getCurrentRun(): Promise<RunSnapshot | null>;
@@ -124,10 +124,10 @@ export class HttpBackend implements Backend {
     return request<ConfigView>('/api/config');
   }
 
-  async getStepCatalog(): Promise<StepDefinition[] | null> {
+  async getStepCatalog(): Promise<StepCatalog | null> {
     try {
-      const payload = await request<{ steps: StepDefinition[] }>('/api/catalog/steps');
-      return payload.steps;
+      const payload = await request<StepCatalog>('/api/catalog/steps');
+      return payload;
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 404) return null;
       throw error;

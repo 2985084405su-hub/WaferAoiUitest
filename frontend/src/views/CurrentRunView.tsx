@@ -109,11 +109,14 @@ function ConclusionCard({ run }: { run: RunSnapshot | null }) {
 }
 
 export function CurrentRunView({ session }: { session: Session }) {
-  const { run, now, selectedStep, setSelectedStep, logs, prepChecks } = session;
+  const { run, now, selectedStep, setSelectedStep, logs, prepChecks, range, sectionRange } = session;
   const [report, setReport] = useState<unknown | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const step = run?.steps.find((item) => item.stepId === selectedStep) ?? null;
   const reportReady = Boolean(run && (run.phase === 'finished' || run.pendingField.active));
+  // 步骤条数只认快照（本轮）或 catalog（未运行），不写死。
+  const stepCount = run?.steps.length ?? session.idleSteps.length;
+  const shownRange = run?.range ?? range;
 
   useEffect(() => {
     if (!reportOpen) return;
@@ -143,7 +146,7 @@ export function CurrentRunView({ session }: { session: Session }) {
 
       <section className="col col-main">
         <PhaseStepper phase={run?.phase ?? null} />
-        <RunSummary run={run} now={now} />
+        <RunSummary run={run} now={now} range={shownRange} sectionRange={sectionRange} />
 
         {run ? (
           <CheckpointCard
@@ -168,7 +171,7 @@ export function CurrentRunView({ session }: { session: Session }) {
         <section className="card" aria-labelledby="steps-title">
           <div className="card-head">
             <h2 id="steps-title">步骤清单</h2>
-            <span className="muted">27 步 · 按章节</span>
+            <span className="muted">{stepCount > 0 ? `${stepCount} 步 · 按章节` : '按章节'}</span>
           </div>
           <StepList
             steps={run?.steps ?? session.idleSteps}
@@ -178,7 +181,9 @@ export function CurrentRunView({ session }: { session: Session }) {
           />
           {!run && session.idleSteps.length === 0 ? (
             <p className="empty">
-              后端尚未提供步骤定义接口（GET /api/steps），27 步清单将在开始执行后由快照下发。
+              后端尚未提供步骤定义接口（GET /api/catalog/steps）
+              {session.catalogRange ? `；本期范围共 ${session.catalogRange.implemented} 步` : ''}
+              ，步骤清单将在开始执行后由快照下发。
             </p>
           ) : null}
         </section>
