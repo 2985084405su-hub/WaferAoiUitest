@@ -106,7 +106,9 @@ export function RunSummary({ run, now, range, sectionRange }: RunSummaryProps) {
           </>
         ) : null}
         <span className="muted">
-          合计 {counts?.total ?? total} / {range?.implemented ?? total}
+          {counts
+            ? `合计 ${counts.total} / ${range?.implemented ?? counts.total}`
+            : `本期范围 ${range?.implemented ?? 0} 步`}
         </span>
       </div>
 
