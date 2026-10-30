@@ -29,6 +29,7 @@ internal sealed partial class MainFlowRunner
     {
         _application = new WaferAoiApplication(_settings, _artifacts.Log);
         _application.Start();
+        WriteProductProcessRecord();
         _ui = new OwnedUi(_application, _settings, MainFlowInputs.ApprovedSelections, _artifacts.Log);
         _startup = new SoftwareStartupFlow(_ui, _settings, _artifacts.Log);
         _startup.WaitForLoginWindow();
@@ -51,6 +52,30 @@ internal sealed partial class MainFlowRunner
         }
 
         _artifacts.CaptureScreen("01.01启动登录窗口", "01.01");
+    }
+
+    /// <summary>
+    /// 启动被测程序后立即把 PID 与启动时间落盘。执行器在中途异常退出时，
+    /// Web 仍能核验被测程序身份，而不是因为没有 PID 永久无法解除机器占用。
+    /// </summary>
+    private void WriteProductProcessRecord()
+    {
+        if (_application == null || _application.ProcessId <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            string startedAt = _application.StartedAt?.ToString("O") ?? string.Empty;
+            File.WriteAllText(
+                Path.Combine(_manifest.RunDir, "product-process.json"),
+                "{\"processId\":" + _application.ProcessId + ",\"startedAt\":\"" + startedAt + "\"}");
+        }
+        catch (Exception exception)
+        {
+            _artifacts.Log("被测程序身份落盘失败：" + exception.Message);
+        }
     }
 
     /// <summary>选择账号并登录，等待主窗口出现。</summary>

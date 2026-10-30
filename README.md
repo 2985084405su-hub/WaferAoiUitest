@@ -42,6 +42,8 @@ WaferAoiUitest/
 - 编译：Contracts / Web / Executor Release 0 错误（VS 2022 MSBuild）。
 - 模拟端到端（本机）：45 步；跳过硬件策略 `passedWithSkips`（23/22/0/0）；严格策略 5 个确认点（03.01、03.02、06.01、07.10、07.11）逐个提交后 `passedWithSkips`（44 含 5 人工 / 1 跳过）；报告 45 步、证据下载 200。
 - 真实入口冒烟：真实模式创建运行后执行器被实际启动；未提权/无密码时 01.01 记 `blocked`、其余 44 步 `notRun`、结论 `blocked`、清理 `succeeded`，没有伪造通过。
+- 待现场处理闭环（2026-10-30 模拟复验）：执行器在确认点被杀后，当前步骤记 `unknown`、结论 `pendingField`、锁保持；宿主重启仍为待现场处理并拒绝新一轮；现场处理核验通过后才删除机器锁，运行阶段收敛为 `finished`、结论仍是 `interrupted`（不回写成功、不自动续跑）。被测程序 PID 在启动后立即写入 `product-process.json`，执行器崩溃后仍可用于核验。
+- 2026-10-27 现场真实运行：走到 07.01 时因“参数输入框未被唯一识别”阻塞（旧版阻塞文案，页面本身有四个参数），其后进入待现场处理并保留机器占用。该轮使用的执行器不是 HEAD 发布包；当前 `dist` 已按 HEAD 重建（含 07.01 定位修复 9f7cf2c），下次现场运行请从新的 `dist` 启动。
 
 **未完成（不得当作已交付）**
 
@@ -87,6 +89,7 @@ runs/<runId>/
   report.json            最终报告
   artifacts/             证据（截图、steps.log、主流程步骤结果.txt、失败快照）
   commands/  acks/       网页确认命令与执行器回执
+  product-process.json   执行器启动被测程序后立即落盘的身份（PID + 启动时间）
   executor.stdout.log   执行器诊断输出（非协议流）
 ```
 

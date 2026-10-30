@@ -50,11 +50,23 @@ internal static class Program
                        Path.Combine(manifest.RunDir, "commands"),
                        Path.Combine(manifest.RunDir, "acks")))
             {
-            var checkpoints = new CheckpointGate(
-                       manifest,
-                       writer,
-                       channel,
-                       TimeSpan.FromSeconds(Math.Max(5, manifest.CheckpointTimeoutSeconds)));
+                if (manifest.Steps.Count != MainFlowCatalog.ImplementedStepCount)
+                {
+                    // 宿主与执行器不是同一次构建时，也必须发布终结事件；否则宿主只能按“未发布 run.finished”保持占用。
+                    string mismatch =
+                        $"运行清单步骤数为 {manifest.Steps.Count}，本期必须为 {MainFlowCatalog.ImplementedStepCount}；" +
+                        "宿主与执行器版本不一致，本轮未启动被测程序。";
+                    writer.Emit(EventType.Log, message: mismatch);
+                    writer.Emit(EventType.RunFinished, phase: RunPhase.Finished, reason: mismatch);
+                    Console.Error.WriteLine(mismatch);
+                    return ExitInvalidArguments;
+                }
+
+                var checkpoints = new CheckpointGate(
+                    manifest,
+                    writer,
+                    channel,
+                    TimeSpan.FromSeconds(Math.Max(5, manifest.CheckpointTimeoutSeconds)));
 
                 writer.Emit(
                     EventType.Log,
@@ -155,11 +167,6 @@ internal static class ManifestReader
             throw new InvalidDataException("运行清单缺少 runId 或 runDir。");
         }
 
-        if (manifest.Steps.Count != MainFlowCatalog.ImplementedStepCount)
-        {
-            throw new InvalidDataException(
-                $"运行清单步骤数为 {manifest.Steps.Count}，本期必须为 {MainFlowCatalog.ImplementedStepCount}。");
-        }
 
         Directory.CreateDirectory(manifest.RunDir);
         Directory.CreateDirectory(Path.Combine(manifest.RunDir, "artifacts"));

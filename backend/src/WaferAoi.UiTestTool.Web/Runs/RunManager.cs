@@ -779,7 +779,16 @@ internal sealed class RunManager
         else
         {
             int processId = state.ProductProcessId > 0 ? state.ProductProcessId : session.Snapshot.PendingField.ProcessId;
-            result.Add(VerifyProductProcessExited(processId, state.ProductProcessStartedAt));
+            DateTimeOffset? startedAt = state.ProductProcessStartedAt;
+            if (processId <= 0 && TryReadProductProcess(session, out ProductProcessRecord? recorded))
+            {
+                processId = recorded!.ProcessId;
+                startedAt ??= recorded.StartedAt;
+            }
+
+            result.Add(processId > 0
+                ? VerifyProductProcessExited(processId, startedAt)
+                : VerifyProductNotLaunched(session));
 
             string exePath = session.Snapshot.Config.ExePath;
             result.Add(VerifyNoConflictingProcess(exePath, processId));
@@ -793,6 +802,64 @@ internal sealed class RunManager
             Detail = "现场已在网页明确确认设备状态已处理。"
         });
         return result;
+    }
+
+    /// <summary>读取执行器启动被测程序时立即落盘的身份记录；执行器崩溃后仍可据此核验。</summary>
+    private static bool TryReadProductProcess(RunSession session, out ProductProcessRecord? record)
+    {
+        record = null;
+        try
+        {
+            string path = Path.Combine(session.RunDirectory, "product-process.json");
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            record = JsonSerializer.Deserialize<ProductProcessRecord>(File.ReadAllText(path), JsonDefaults.File);
+            return record != null && record.ProcessId > 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>执行器落盘的被测程序身份。</summary>
+    private sealed class ProductProcessRecord
+    {
+        /// <summary>被测程序 PID。</summary>
+        public int ProcessId { get; set; }
+
+        /// <summary>被测程序启动时间，用于识别 PID 复用。</summary>
+        public DateTimeOffset? StartedAt { get; set; }
+    }
+
+    /// <summary>
+    /// 查不到任何被测程序 PID 时的判定：只有本轮从未开始任何步骤，才能确认未启动被测程序；
+    /// 否则无法证明被测程序是否仍在运行，继续保持占用并要求人工核对。
+    /// </summary>
+    private static FieldVerification VerifyProductNotLaunched(RunSession session)
+    {
+        bool anyStepStarted = session.Snapshot.Steps.Any(step => step.Status != StepStatus.NotRun);
+        if (!anyStepStarted)
+        {
+            return new FieldVerification
+            {
+                Id = "process_exited",
+                Label = "本轮被测程序已退出",
+                Passed = true,
+                Detail = "本轮没有任何步骤开始执行，也没有记录被测程序 PID：可以确认本轮未启动被测程序。"
+            };
+        }
+
+        return new FieldVerification
+        {
+            Id = "process_exited",
+            Label = "本轮被测程序已退出",
+            Passed = false,
+            Detail = "本轮已有步骤开始执行，但查不到被测程序 PID，无法核验其是否仍在运行；请人工确认设备与进程后再处理。"
+        };
     }
 
     /// <summary>核验原被测进程已退出，并防止 PID 复用造成误判。</summary>

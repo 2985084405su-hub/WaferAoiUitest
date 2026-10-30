@@ -26,3 +26,7 @@ frontend/.vite/
 *.bak
 Thumbs.db
 desktop.ini
+
+# 本机 IDE / dotnet run 生成的文件
+**/Properties/launchSettings.json
+

@@ -115,10 +115,12 @@ internal static class EventProjector
                 snapshot.PendingField.Note = item.Message ?? item.Data?.GetValueOrDefault("note") ?? string.Empty;
                 snapshot.PendingField.ProcessExitedVerified = item.Data?.GetValueOrDefault("processExitedVerified") == "true";
                 snapshot.PendingField.DeviceStateVerified = item.Data?.GetValueOrDefault("deviceStateVerified") == "true";
+                FinishAfterPendingField(snapshot);
                 break;
 
             case EventType.LockReleased:
                 snapshot.PendingField.Active = false;
+                FinishAfterPendingField(snapshot);
                 break;
 
             case EventType.Log:
@@ -339,6 +341,21 @@ internal static class EventProjector
         session.Snapshot.Cleanup.FinishedAt = item.At;
         session.Snapshot.Cleanup.Reason = item.Reason ?? item.Message ?? string.Empty;
         session.Snapshot.Phase = RunPhase.Cleaning;
+    }
+
+    /// <summary>
+    /// 现场处理解除后把本轮收敛为“已结束”。runFinished 记录的阶段是 pendingField，
+    /// 若不改回 finished，重放事件或刷新页面后仍显示“待现场处理”：页面没有处理入口，也不能开下一轮。
+    /// </summary>
+    private static void FinishAfterPendingField(RunSnapshot snapshot)
+    {
+        if (snapshot.FinishedAt == null)
+        {
+            return;
+        }
+
+        snapshot.Phase = RunPhase.Finished;
+        snapshot.Conclusion = DetermineConclusion(snapshot);
     }
 
     /// <summary>计算结论。</summary>
